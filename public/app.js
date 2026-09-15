@@ -1,8 +1,12 @@
 const API = '/api';
-const CATEGORY_LABELS = { knowledge: '知識力', stamina: '體力', mental: '精神穩定度' };
-const TYPE_LABELS = {
-  emotion: '情緒型', progress: '進度型', staged: '分階段型', wish: '長期心願型', effort: '主動做功',
+const GROWTH_LABELS = {
+  skill: '專業技能力', stamina: '體力', mental: '精神穩定度',
+  knowledge: '知識力', life: '生活穩定度', economic: '經濟力',
 };
+const TYPE_LABELS = { acute: '急性情緒', chronic: '慢性壓力', todo: '待辦清單' };
+const DECAY_LABELS = { fast: '快', medium: '中', long: '長' };
+
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 // ---------- 主題切換 ----------
 function initTheme() {
@@ -13,6 +17,7 @@ function initTheme() {
       const t = btn.getAttribute('data-theme-btn');
       document.documentElement.setAttribute('data-theme', t);
       localStorage.setItem('margin-theme', t);
+      loadDashboard();
     });
   });
 }
@@ -26,23 +31,24 @@ function initTabs() {
       document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
       document.getElementById(`view-${view}`).classList.remove('hidden');
       if (view === 'events') loadEvents();
+      if (view === 'completions') loadCompletions();
       if (view === 'notes') loadNotes();
       if (view === 'weekly') loadWeeklyPlan();
-      if (view === 'growth') loadGrowth();
     });
   });
 }
 
 async function api(path, opts) {
-  const res = await fetch(API + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-  });
+  const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || '請求失敗');
   }
   return res.status === 204 ? null : res.json();
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ---------- 儀表板 ----------
@@ -73,6 +79,7 @@ async function loadDashboard() {
     }
 
     await loadTrend();
+    await loadGrowthOnDashboard();
   } catch (err) {
     console.error(err);
     document.getElementById('marginCaption').textContent = '讀取失敗，請確認資料庫連線設定。';
@@ -88,7 +95,7 @@ function renderBreakdown(breakdown) {
   }
   list.innerHTML = entries.map(([cat, val]) => `
     <li>
-      <span>${cat}</span>
+      <span>${escapeHtml(cat)}</span>
       <span class="${val >= 0 ? 'neg' : 'pos'}">${val >= 0 ? '-' : '+'}${Math.abs(val).toFixed(1)}</span>
     </li>
   `).join('');
@@ -108,18 +115,22 @@ async function loadTrend() {
   if (trendChart) trendChart.destroy();
   trendChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data, borderColor: accent, backgroundColor: accent + '22',
-        fill: true, tension: 0.35, pointRadius: 3,
-      }],
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: { y: { min: 0, max: 100 } },
-    },
+    data: { labels, datasets: [{ data, borderColor: accent, backgroundColor: accent + '22', fill: true, tension: 0.35, pointRadius: 3 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
   });
+}
+
+async function loadGrowthOnDashboard() {
+  const { totals } = await api('/growth/summary');
+  const max = Math.max(10, ...Object.values(totals));
+  const row = document.getElementById('growthStatRow');
+  row.innerHTML = Object.keys(GROWTH_LABELS).map((cat) => `
+    <div class="growth-stat">
+      <span class="growth-label">${GROWTH_LABELS[cat]}</span>
+      <div class="growth-bar"><div class="growth-bar-fill" style="width:${(totals[cat] / max) * 100}%"></div></div>
+      <span class="growth-value">${totals[cat]}</span>
+    </div>
+  `).join('');
 }
 
 document.getElementById('btnAnotherSuggestion').addEventListener('click', () => loadRandomSuggestion());
@@ -127,53 +138,29 @@ document.getElementById('btnDismissSuggestion').addEventListener('click', () => 
   document.getElementById('suggestionCard').classList.add('hidden');
 });
 
-// ---------- 事件 ----------
+// ---------- 事件（負擔） ----------
 function updateEventFormVisibility() {
   const type = document.getElementById('ev-type').value;
-  document.getElementById('field-burden').classList.toggle('hidden', type === 'wish');
-  document.getElementById('field-decay').classList.toggle('hidden', !['emotion', 'effort'].includes(type));
-  document.getElementById('field-anxious').classList.toggle('hidden', type !== 'wish');
-  document.getElementById('field-milestones').classList.toggle('hidden', type !== 'staged');
+  document.getElementById('field-decay').classList.toggle('hidden', type !== 'acute');
 }
 document.getElementById('ev-type').addEventListener('change', updateEventFormVisibility);
-
-document.getElementById('btnAddMilestone').addEventListener('click', () => {
-  const row = document.createElement('div');
-  row.className = 'milestone-row';
-  row.innerHTML = `
-    <input type="text" placeholder="里程碑名稱，如：完成會談">
-    <input type="number" placeholder="釋放%" min="1" max="100">
-  `;
-  document.getElementById('milestoneRows').appendChild(row);
-});
+document.getElementById('ev-date').value = todayStr();
 
 document.getElementById('eventForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const type = document.getElementById('ev-type').value;
-  const milestones = [];
-  if (type === 'staged') {
-    document.querySelectorAll('#milestoneRows .milestone-row').forEach((row) => {
-      const [labelInput, pctInput] = row.querySelectorAll('input');
-      if (labelInput.value && pctInput.value) {
-        milestones.push({ label: labelInput.value, release_percent: Number(pctInput.value) });
-      }
-    });
-  }
   const payload = {
-    type,
+    type: document.getElementById('ev-type').value,
     title: document.getElementById('ev-title').value,
     category: document.getElementById('ev-category').value || '未分類',
+    event_date: document.getElementById('ev-date').value || todayStr(),
     initial_burden: Number(document.getElementById('ev-burden').value) || 10,
     decay_speed: document.getElementById('ev-decay').value,
-    anxious: document.getElementById('ev-anxious').checked,
-    milestones,
   };
   await api('/events', { method: 'POST', body: JSON.stringify(payload) });
   e.target.reset();
-  document.getElementById('milestoneRows').innerHTML = '';
+  document.getElementById('ev-date').value = todayStr();
   updateEventFormVisibility();
-  await loadEvents();
-  await loadDashboard();
+  await loadEvents(); await loadDashboard();
 });
 
 async function loadEvents() {
@@ -185,27 +172,16 @@ async function loadEvents() {
   }
   list.innerHTML = events.map(renderEventCard).join('');
 
-  list.querySelectorAll('[data-progress-id]').forEach((input) => {
-    input.addEventListener('change', async () => {
-      await api(`/events/${input.dataset.progressId}`, {
-        method: 'PATCH', body: JSON.stringify({ progress: Number(input.value) }),
-      });
-      await loadEvents(); await loadDashboard();
-    });
-  });
   list.querySelectorAll('[data-resolve-id]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await api(`/events/${btn.dataset.resolveId}`, {
-        method: 'PATCH', body: JSON.stringify({ status: 'resolved' }),
-      });
+      await api(`/events/${btn.dataset.resolveId}/resolve`, { method: 'PATCH' });
       await loadEvents(); await loadDashboard();
     });
   });
-  list.querySelectorAll('[data-milestone]').forEach((chip) => {
-    chip.addEventListener('click', async () => {
-      if (chip.classList.contains('done')) return;
-      const [eventId, mid] = chip.dataset.milestone.split(':');
-      await api(`/events/${eventId}/milestones/${mid}/complete`, { method: 'POST' });
+  list.querySelectorAll('[data-dot]').forEach((dotBtn) => {
+    dotBtn.addEventListener('click', async () => {
+      const [eventId, dotIndex] = dotBtn.dataset.dot.split(':');
+      await api(`/events/${eventId}/progress`, { method: 'PATCH', body: JSON.stringify({ dots: Number(dotIndex) }) });
       await loadEvents(); await loadDashboard();
     });
   });
@@ -214,24 +190,30 @@ async function loadEvents() {
 function renderEventCard(e) {
   const typeLabel = TYPE_LABELS[e.type] || e.type;
   let body = '';
-  if (e.type === 'progress') {
+
+  if (e.type === 'acute') {
+    const totalDots = { fast: 1, medium: 3, long: 7 }[e.decay_speed] || 3;
+    const daysPassed = Math.max(0, Math.floor((new Date(todayStr()) - new Date(e.event_date)) / 86400000));
+    const filled = Math.min(totalDots, daysPassed);
     body = `
-      <input type="range" min="0" max="100" value="${e.progress || 0}" data-progress-id="${e.id}">
-      <div class="event-meta">完成度 ${e.progress || 0}%</div>
+      <div class="dot-scale">${Array.from({ length: totalDots }).map((_, i) => `<span class="dot ${i < filled ? 'filled' : ''}"></span>`).join('')}</div>
+      <div class="event-meta">淡化速度：${DECAY_LABELS[e.decay_speed] || '中'}</div>
     `;
-  } else if (e.type === 'staged') {
-    body = `<div class="event-actions">${(e.milestones || []).map((m) => `
-      <span class="milestone-chip ${m.completed ? 'done' : ''}" data-milestone="${e.id}:${m.id}">
-        ${m.label}（${m.release_percent}%）${m.completed ? '✓' : ''}
-      </span>`).join('')}</div>`;
+  } else if (e.type === 'chronic') {
+    const dots = Number(e.progress || 0);
+    body = `
+      <div class="dot-scale-10">
+        ${Array.from({ length: 10 }).map((_, i) => `<button type="button" class="dot-10 ${i < dots ? 'filled' : ''}" data-dot="${e.id}:${i + 1}"></button>`).join('')}
+        <span class="progress-percent">${dots * 10}%</span>
+      </div>
+    `;
   }
-  const showResolve = e.type !== 'wish';
+
+  const showResolve = e.type === 'todo';
   return `
     <div class="event-card">
-      <div class="event-card-head">
-        <span class="event-title">${escapeHtml(e.title)}</span>
-      </div>
-      <div class="event-meta">${typeLabel} · ${escapeHtml(e.category)}</div>
+      <div class="event-card-head"><span class="event-title">${escapeHtml(e.title)}</span></div>
+      <div class="event-meta">${typeLabel} · ${escapeHtml(e.category)} · ${e.event_date ? e.event_date.slice(0, 10) : ''}</div>
       ${body}
       <div class="event-actions">
         ${showResolve ? `<button class="btn-ghost small" data-resolve-id="${e.id}">標記已解決</button>` : ''}
@@ -240,8 +222,31 @@ function renderEventCard(e) {
   `;
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// ---------- 完成清單 ----------
+document.getElementById('co-date').value = todayStr();
+
+document.getElementById('completionForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    title: document.getElementById('co-title').value,
+    category: document.getElementById('co-category').value,
+    event_date: document.getElementById('co-date').value || todayStr(),
+    lightness: document.getElementById('co-lightness').value,
+  };
+  await api('/completions', { method: 'POST', body: JSON.stringify(payload) });
+  e.target.reset();
+  document.getElementById('co-date').value = todayStr();
+  await loadCompletions(); await loadDashboard();
+});
+
+async function loadCompletions() {
+  const rows = await api('/completions');
+  const list = document.getElementById('completionList');
+  list.innerHTML = rows.map((r) => `
+    <li>
+      <span>${escapeHtml(r.title)}<div class="item-meta">${escapeHtml(r.category)} · ${r.event_date ? r.event_date.slice(0, 10) : ''}</div></span>
+    </li>
+  `).join('') || '<li>還沒有完成紀錄。</li>';
 }
 
 // ---------- 隨手記 ----------
@@ -276,22 +281,16 @@ async function loadNotes() {
 }
 
 // ---------- 本週規劃 ----------
-const DAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+const WEEKLY_CATEGORIES = ['課業', '工作', '聚會', '出遊'];
 
 function addWeeklyItemRow() {
   const row = document.createElement('div');
   row.className = 'weekly-item-row';
   row.innerHTML = `
     <input type="text" placeholder="事項名稱">
-    <select class="w-type">
-      <option value="emotion">情緒型</option>
-      <option value="progress">進度型</option>
-    </select>
-    <select class="w-day">
-      ${DAY_LABELS.map((d, i) => `<option value="${i}">週${d}</option>`).join('')}
-    </select>
-    <input type="number" class="w-burden" placeholder="負擔強度" min="1" max="100" value="15">
-    <input type="text" class="w-category" placeholder="分類">
+    <select class="w-category">${WEEKLY_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+    <input type="date" class="w-date" value="${todayStr()}">
+    <input type="number" class="w-burden" placeholder="強度" min="1" max="100" value="15">
   `;
   document.getElementById('weeklyItemRows').appendChild(row);
 }
@@ -300,13 +299,12 @@ document.getElementById('btnAddWeeklyItem').addEventListener('click', addWeeklyI
 document.getElementById('btnSaveWeeklyPlan').addEventListener('click', async () => {
   const items = [];
   document.querySelectorAll('#weeklyItemRows .weekly-item-row').forEach((row) => {
-    const [titleInput] = row.querySelectorAll('input[type="text"]');
-    const type = row.querySelector('.w-type').value;
-    const day = Number(row.querySelector('.w-day').value);
-    const burden = Number(row.querySelector('.w-burden').value) || 10;
-    const category = row.querySelector('.w-category').value || '未分類';
-    if (titleInput.value) {
-      items.push({ title: titleInput.value, type, expected_day_index: day, initial_burden: burden, category, decay_speed: 'medium' });
+    const titleInput = row.querySelector('input[type="text"]');
+    const category = row.querySelector('.w-category').value;
+    const event_date = row.querySelector('.w-date').value;
+    const burden = Number(row.querySelector('.w-burden').value) || 15;
+    if (titleInput.value && event_date) {
+      items.push({ title: titleInput.value, category, event_date, initial_burden: burden });
     }
   });
   const result = await api('/weekly-plan', { method: 'POST', body: JSON.stringify({ items }) });
@@ -322,35 +320,17 @@ async function loadWeeklyPlan() {
 }
 
 let weeklyChart;
-function renderWeeklyChart(curve) {
+function renderWeeklyChart(histogram) {
   const ctx = document.getElementById('weeklyChart');
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   const labels = ['一', '二', '三', '四', '五', '六', '日'];
   const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-  const data = keys.map((k) => curve[k]);
+  const data = keys.map((k) => histogram[k]);
   if (weeklyChart) weeklyChart.destroy();
   weeklyChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: accent }] },
-    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } },
-  });
-}
-
-// ---------- 成長軸線 ----------
-document.querySelectorAll('.growth-btn').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    const category = btn.dataset.growth;
-    await api('/growth', { method: 'POST', body: JSON.stringify({ category, amount: 1 }) });
-    await loadGrowth();
-  });
-});
-
-async function loadGrowth() {
-  const { totals } = await api('/growth/summary');
-  const max = Math.max(10, ...Object.values(totals));
-  ['knowledge', 'stamina', 'mental'].forEach((cat) => {
-    document.getElementById(`val-${cat}`).textContent = totals[cat];
-    document.getElementById(`bar-${cat}`).style.width = `${(totals[cat] / max) * 100}%`;
+    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, beginAtZero: true, title: { display: true, text: '負擔量' } } } },
   });
 }
 

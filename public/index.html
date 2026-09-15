@@ -33,8 +33,9 @@
       <div class="hero-margin">
         <div class="breathing-ring" id="breathingRing">
           <div class="breathing-core">
-            <span class="margin-number" id="marginNumber">--</span>
-            <span class="margin-unit">%</span>
+            <div class="margin-number-wrap">
+              <span class="margin-number" id="marginNumber">--</span><span class="margin-unit">%</span>
+            </div>
           </div>
         </div>
         <p class="hero-caption" id="marginCaption">正在讀取你的餘裕狀態…</p>
@@ -58,12 +59,17 @@
         <h2 class="panel-title">目前負擔來源</h2>
         <ul class="breakdown-list" id="breakdownList"></ul>
       </div>
+
+      <div class="panel">
+        <h2 class="panel-title">長期投資成長軸</h2>
+        <div class="growth-stat-row" id="growthStatRow"></div>
+      </div>
     </section>
 
-    <!-- ===== 事件記錄 ===== -->
+    <!-- ===== 事件（負擔） ===== -->
     <section class="view hidden" id="view-events">
       <div class="panel">
-        <h2 class="panel-title">新增事件</h2>
+        <h2 class="panel-title">新增負擔事件</h2>
         <form id="eventForm" class="form-grid">
           <label class="field">
             <span>事件名稱</span>
@@ -71,13 +77,11 @@
           </label>
 
           <label class="field">
-            <span>類型</span>
+            <span>大類</span>
             <select id="ev-type">
-              <option value="emotion">情緒型（隨時間淡化）</option>
-              <option value="progress">進度型（如開戶，隨進度釋放）</option>
-              <option value="staged">分階段型（如諮商，分次釋放）</option>
-              <option value="wish">長期心願型（不計分，僅提醒）</option>
-              <option value="effort">主動做功加成（洗衣、看完一本書…）</option>
+              <option value="acute">急性情緒（淡化型）</option>
+              <option value="chronic">慢性壓力（進度型）</option>
+              <option value="todo">待辦清單（單次型）</option>
             </select>
           </label>
 
@@ -86,7 +90,12 @@
             <input type="text" id="ev-category" placeholder="工作 / 健康 / 心理 / 家務…">
           </label>
 
-          <label class="field" id="field-burden">
+          <label class="field">
+            <span>日期</span>
+            <input type="date" id="ev-date">
+          </label>
+
+          <label class="field">
             <span>初始負擔強度（1–100）</span>
             <input type="number" id="ev-burden" min="1" max="100" value="20">
           </label>
@@ -94,22 +103,11 @@
           <label class="field" id="field-decay">
             <span>淡化速度</span>
             <select id="ev-decay">
-              <option value="fast">快（約 1–2 天）</option>
-              <option value="medium" selected>中（約 1 週）</option>
-              <option value="slow">慢（約 2 週以上）</option>
+              <option value="fast">快（隔天就好）</option>
+              <option value="medium" selected>中（約 1–3 天）</option>
+              <option value="long">長（約 3–7 天）</option>
             </select>
           </label>
-
-          <label class="field checkbox-field" id="field-anxious">
-            <input type="checkbox" id="ev-anxious">
-            <span>這個心願目前讓我有點焦慮</span>
-          </label>
-
-          <div class="field" id="field-milestones">
-            <span>分階段釋放設定</span>
-            <div id="milestoneRows"></div>
-            <button type="button" class="btn-ghost small" id="btnAddMilestone">+ 新增里程碑</button>
-          </div>
 
           <button type="submit" class="btn-primary full">新增</button>
         </form>
@@ -118,6 +116,47 @@
       <div class="panel">
         <h2 class="panel-title">進行中的事件</h2>
         <div id="eventList" class="event-list"></div>
+      </div>
+    </section>
+
+    <!-- ===== 完成清單 ===== -->
+    <section class="view hidden" id="view-completions">
+      <div class="panel">
+        <h2 class="panel-title">記一筆完成的事</h2>
+        <form id="completionForm" class="form-grid">
+          <label class="field">
+            <span>完成了什麼</span>
+            <input type="text" id="co-title" required placeholder="例如：洗了衣服、看完一本書">
+          </label>
+          <label class="field">
+            <span>分類</span>
+            <select id="co-category">
+              <option value="功課">功課 → 專業技能力</option>
+              <option value="工作">工作 → 經濟力</option>
+              <option value="身體健康">身體健康 → 體力</option>
+              <option value="心理照顧">心理照顧 → 精神穩定度</option>
+              <option value="自我成長">自我成長 → 知識力</option>
+              <option value="家務財務">家務財務 → 生活穩定度</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>日期</span>
+            <input type="date" id="co-date">
+          </label>
+          <label class="field">
+            <span>做完後感覺多輕盈</span>
+            <select id="co-lightness">
+              <option value="small">有一點輕鬆</option>
+              <option value="medium" selected>滿輕鬆的</option>
+              <option value="large">非常輕鬆</option>
+            </select>
+          </label>
+          <button type="submit" class="btn-primary full">記錄完成</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2 class="panel-title">最近完成</h2>
+        <ul class="note-list" id="completionList"></ul>
       </div>
     </section>
 
@@ -144,47 +183,16 @@
     <!-- ===== 本週規劃 ===== -->
     <section class="view hidden" id="view-weekly">
       <div class="panel">
-        <h2 class="panel-title">下週行程規劃</h2>
-        <p class="panel-hint">週日晚間到週一中午前，把已知的下週事項填進來，系統會預測本週每天的餘裕曲線。</p>
+        <h2 class="panel-title">下週可預期的行程</h2>
+        <p class="panel-hint">只記已經知道會發生的事，點選日期即可，不用猜測強度太細。</p>
         <div id="weeklyItemRows"></div>
         <button type="button" class="btn-ghost small" id="btnAddWeeklyItem">+ 新增一項</button>
         <button type="button" class="btn-primary full" id="btnSaveWeeklyPlan" style="margin-top:12px">儲存本週規劃</button>
       </div>
       <div class="panel">
-        <h2 class="panel-title">本週預測曲線</h2>
-        <canvas id="weeklyChart" height="140"></canvas>
-      </div>
-    </section>
-
-    <!-- ===== 成長軸線 ===== -->
-    <section class="view hidden" id="view-growth">
-      <div class="panel">
-        <h2 class="panel-title">記一筆長期投資</h2>
-        <div class="growth-buttons">
-          <button class="growth-btn" data-growth="knowledge">📖 閱讀 → 知識力</button>
-          <button class="growth-btn" data-growth="stamina">🏃 運動 → 體力</button>
-          <button class="growth-btn" data-growth="mental">🧘 冥想 → 精神穩定度</button>
-        </div>
-      </div>
-      <div class="panel">
-        <h2 class="panel-title">累積成長</h2>
-        <div class="growth-stat-row">
-          <div class="growth-stat">
-            <span class="growth-label">知識力</span>
-            <div class="growth-bar"><div class="growth-bar-fill" id="bar-knowledge"></div></div>
-            <span class="growth-value" id="val-knowledge">0</span>
-          </div>
-          <div class="growth-stat">
-            <span class="growth-label">體力</span>
-            <div class="growth-bar"><div class="growth-bar-fill" id="bar-stamina"></div></div>
-            <span class="growth-value" id="val-stamina">0</span>
-          </div>
-          <div class="growth-stat">
-            <span class="growth-label">精神穩定度</span>
-            <div class="growth-bar"><div class="growth-bar-fill" id="bar-mental"></div></div>
-            <span class="growth-value" id="val-mental">0</span>
-          </div>
-        </div>
+        <h2 class="panel-title">本週負擔分布（週一–週日）</h2>
+        <p class="panel-hint">長條越高，代表那天預期的心理負擔越重。</p>
+        <canvas id="weeklyChart" height="160"></canvas>
       </div>
     </section>
 
@@ -193,9 +201,9 @@
   <nav class="tabbar">
     <button class="tab-btn active" data-view="dashboard"><span>儀表板</span></button>
     <button class="tab-btn" data-view="events"><span>事件</span></button>
+    <button class="tab-btn" data-view="completions"><span>完成清單</span></button>
     <button class="tab-btn" data-view="notes"><span>隨手記</span></button>
     <button class="tab-btn" data-view="weekly"><span>本週規劃</span></button>
-    <button class="tab-btn" data-view="growth"><span>成長軸線</span></button>
   </nav>
 
 </div>
