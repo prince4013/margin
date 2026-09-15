@@ -77,7 +77,7 @@ app.get('/api/events', async (req, res) => {
     res.json(events.filter((e) => e.type !== 'effort'));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取事件失敗' });
+    res.status(500).json({ error: '讀取事件失敗：' + err.message });
   }
 });
 
@@ -97,7 +97,7 @@ app.post('/api/events', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '新增事件失敗' });
+    res.status(500).json({ error: '新增事件失敗：' + err.message });
   }
 });
 
@@ -115,7 +115,7 @@ app.patch('/api/events/:id/progress', async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '更新進度失敗' });
+    res.status(500).json({ error: '更新進度失敗：' + err.message });
   }
 });
 
@@ -129,7 +129,7 @@ app.patch('/api/events/:id/resolve', async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '更新事件失敗' });
+    res.status(500).json({ error: '更新事件失敗：' + err.message });
   }
 });
 
@@ -145,7 +145,7 @@ app.get('/api/events/departed', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取已離開的心理負擔失敗' });
+    res.status(500).json({ error: '讀取已離開的心理負擔失敗：' + err.message });
   }
 });
 
@@ -155,7 +155,7 @@ app.delete('/api/events/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '刪除事件失敗' });
+    res.status(500).json({ error: '刪除事件失敗：' + err.message });
   }
 });
 
@@ -170,7 +170,7 @@ app.get('/api/completions', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取完成清單失敗' });
+    res.status(500).json({ error: '讀取完成清單失敗：' + err.message });
   }
 });
 
@@ -181,22 +181,28 @@ app.post('/api/completions', async (req, res) => {
   }
   const magnitude = LIGHTNESS_MAP[lightness] || LIGHTNESS_MAP.medium;
   const evDate = event_date || todayStr();
+  const growthCategory = COMPLETION_TO_GROWTH[category];
 
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `INSERT INTO events (type, title, category, initial_burden, event_date)
        VALUES ('effort', $1, $2, $3, $4) RETURNING *`,
       [title, category, magnitude, evDate]
     );
-    const growthCategory = COMPLETION_TO_GROWTH[category];
-    await pool.query(
+    await client.query(
       'INSERT INTO growth_stats (category, amount, note) VALUES ($1, 1, $2)',
       [growthCategory, title]
     );
+    await client.query('COMMIT');
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '新增完成項目失敗' });
+    await client.query('ROLLBACK');
+    console.error('新增完成項目失敗', err);
+    res.status(500).json({ error: '新增完成項目失敗：' + err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -212,7 +218,7 @@ app.get('/api/notes', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取隨手記失敗' });
+    res.status(500).json({ error: '讀取隨手記失敗：' + err.message });
   }
 });
 
@@ -227,7 +233,7 @@ app.post('/api/notes', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '新增隨手記失敗' });
+    res.status(500).json({ error: '新增隨手記失敗：' + err.message });
   }
 });
 
@@ -240,7 +246,7 @@ app.patch('/api/notes/:id/triage', async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '更新隨手記失敗' });
+    res.status(500).json({ error: '更新隨手記失敗：' + err.message });
   }
 });
 
@@ -250,7 +256,7 @@ app.delete('/api/notes/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '刪除隨手記失敗' });
+    res.status(500).json({ error: '刪除隨手記失敗：' + err.message });
   }
 });
 
@@ -266,27 +272,34 @@ app.get('/api/growth/summary', async (req, res) => {
     res.json({ totals: totalsMap });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取成長總覽失敗' });
+    res.status(500).json({ error: '讀取成長總覽失敗：' + err.message });
   }
 });
 
 // ================= WEEKLY PLAN（本週規劃：課業/工作/聚會/出遊 + 日期）=================
 app.get('/api/weekly-plan/current', async (req, res) => {
-  const weekStart = mondayOf(new Date()).toISOString().slice(0, 10);
   try {
-    const { rows } = await pool.query('SELECT * FROM weekly_plans WHERE week_start = $1', [weekStart]);
+    const { rows } = await pool.query('SELECT * FROM weekly_plans ORDER BY week_start DESC LIMIT 1');
     res.json(rows[0] || null);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取本週規劃失敗' });
+    res.status(500).json({ error: '讀取本週規劃失敗：' + err.message });
   }
 });
 
 app.post('/api/weekly-plan', async (req, res) => {
   const { items } = req.body; // [{title, category(課業/工作/聚會/出遊), initial_burden, event_date}]
-  if (!Array.isArray(items)) return res.status(400).json({ error: 'items 必須是陣列' });
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: '請至少提供一項事項' });
+  }
 
-  const weekStartDate = mondayOf(new Date());
+  // 用「事項實際日期」所在的那一週來畫分布圖，而不是伺服器今天所在的週，
+  // 這樣不論你是在規劃這一週還是下一週，圖表都會對準你實際填入的日期
+  const earliestDate = items
+    .map((it) => new Date(it.event_date))
+    .filter((d) => !isNaN(d))
+    .sort((a, b) => a - b)[0] || new Date();
+  const weekStartDate = mondayOf(earliestDate);
   const weekStart = weekStartDate.toISOString().slice(0, 10);
   const itemsWithDefaults = items.map((it) => ({ ...it, decay_speed: it.decay_speed || 'medium' }));
 
@@ -304,7 +317,7 @@ app.post('/api/weekly-plan', async (req, res) => {
     res.status(201).json({ week_start: weekStart, items: itemsWithDefaults, predicted_curve: histogram });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '儲存本週規劃失敗' });
+    res.status(500).json({ error: '儲存本週規劃失敗：' + err.message });
   }
 });
 
@@ -324,7 +337,7 @@ app.get('/api/suggestion/random', async (req, res) => {
     res.json(rows[0] || null);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取建議失敗' });
+    res.status(500).json({ error: '讀取建議失敗：' + err.message });
   }
 });
 
@@ -348,7 +361,7 @@ app.get('/api/margin', async (req, res) => {
     res.json({ ...result, untriagedCount, showSuggestion: result.margin > 20 });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '計算餘裕值失敗' });
+    res.status(500).json({ error: '計算餘裕值失敗：' + err.message });
   }
 });
 
@@ -359,7 +372,7 @@ app.get('/api/margin/trend', async (req, res) => {
     res.json(rows.reverse());
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: '讀取趨勢失敗' });
+    res.status(500).json({ error: '讀取趨勢失敗：' + err.message });
   }
 });
 

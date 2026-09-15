@@ -56,14 +56,15 @@ function escapeHtml(str) {
 let trendChart;
 
 async function loadDashboard() {
+  const now = new Date();
+  document.getElementById('heroDate').textContent =
+    `${now.getMonth() + 1}月${now.getDate()}日 星期${WEEKDAY_LABELS[now.getDay()]}`;
+
+  // 每個區塊獨立 try/catch，避免其中一個 API 失敗就連帶讓其他區塊（例如成長軸）也不更新
   try {
     const margin = await api('/margin');
     document.getElementById('marginNumber').textContent = margin.margin;
     document.getElementById('breathingRing').style.setProperty('--pct', margin.margin);
-
-    const now = new Date();
-    document.getElementById('heroDate').textContent =
-      `${now.getMonth() + 1}月${now.getDate()}日 星期${WEEKDAY_LABELS[now.getDay()]}`;
 
     const captions = [
       [0, 20, '餘裕偏低，先照顧好自己，別急著做更多事。'],
@@ -82,12 +83,21 @@ async function loadDashboard() {
     } else {
       suggestionCard.classList.add('hidden');
     }
+  } catch (err) {
+    console.error('讀取餘裕值失敗', err);
+    document.getElementById('marginCaption').textContent = '讀取失敗，請確認資料庫連線設定。';
+  }
 
+  try {
     await loadTrend();
+  } catch (err) {
+    console.error('讀取趨勢失敗', err);
+  }
+
+  try {
     await loadGrowthOnDashboard();
   } catch (err) {
-    console.error(err);
-    document.getElementById('marginCaption').textContent = '讀取失敗，請確認資料庫連線設定。';
+    console.error('讀取成長軸失敗', err);
   }
 }
 
