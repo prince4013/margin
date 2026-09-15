@@ -337,31 +337,42 @@ app.post('/api/weekly-plan', async (req, res) => {
     return res.status(400).json({ error: '請至少提供一項事項' });
   }
 
-  // 用「事項實際日期」所在的那一週來畫分布圖，而不是伺服器今天所在的週，
-  // 這樣不論你是在規劃這一週還是下一週，圖表都會對準你實際填入的日期
-  const earliestDate = items
-    .map((it) => new Date(it.event_date))
-    .filter((d) => !isNaN(d))
-    .sort((a, b) => a - b)[0] || new Date();
-  const weekStartDate = mondayOf(earliestDate);
-  const weekStart = weekStartDate.toISOString().slice(0, 10);
-  const itemsWithDefaults = items.map((it) => ({
-    id: it.id || crypto.randomUUID(),
-    ...it,
-  }));
+  const newItems = items.map((it) => ({ id: it.id || crypto.randomUUID(), ...it }));
 
   try {
-    const histogram = computeWeeklyBurdenHistogram(itemsWithDefaults, weekStartDate);
+    // 每次儲存都是「新增」到目前的規劃裡，不是整批覆蓋——
+    // 所以先找出目前已經存在的規劃，把新項目併進去，而不是取代掉舊的
+    const { rows: existingRows } = await pool.query(
+      'SELECT * FROM weekly_plans ORDER BY week_start DESC LIMIT 1'
+    );
+    const existingPlan = existingRows[0];
+
+    let weekStartDate;
+    let combinedItems;
+    if (existingPlan) {
+      weekStartDate = new Date(existingPlan.week_start);
+      combinedItems = [...(existingPlan.items || []), ...newItems];
+    } else {
+      const earliestDate = newItems
+        .map((it) => new Date(it.event_date))
+        .filter((d) => !isNaN(d))
+        .sort((a, b) => a - b)[0] || new Date();
+      weekStartDate = mondayOf(earliestDate);
+      combinedItems = newItems;
+    }
+
+    const weekStart = weekStartDate.toISOString().slice(0, 10);
+    const histogram = computeWeeklyBurdenHistogram(combinedItems, weekStartDate);
 
     await pool.query(
       `INSERT INTO weekly_plans (week_start, items, predicted_curve)
        VALUES ($1,$2,$3)
        ON CONFLICT (week_start) DO UPDATE SET items = $2, predicted_curve = $3`,
-      [weekStart, JSON.stringify(itemsWithDefaults), JSON.stringify(histogram)]
+      [weekStart, JSON.stringify(combinedItems), JSON.stringify(histogram)]
     );
 
     // 注意：本週規劃純粹是視覺化預測，不會建立真正的事件、也不會影響「事件」列表或即時餘裕值
-    res.status(201).json({ week_start: weekStart, items: itemsWithDefaults, predicted_curve: histogram });
+    res.status(201).json({ week_start: weekStart, items: combinedItems, predicted_curve: histogram });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '儲存本週規劃失敗：' + err.message });

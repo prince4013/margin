@@ -144,10 +144,7 @@ async function loadRandomSuggestion(category) {
 
 async function loadTrend() {
   const rows = await api('/margin/trend?days=14');
-  const labels = rows.map((r) => {
-    const [, month, day] = r.date.slice(0, 10).split('-');
-    return `${day}-${month}`;
-  });
+  const labels = rows.map((r) => r.date.slice(5));
   const data = rows.map((r) => Number(r.margin));
   const ctx = document.getElementById('trendChart');
   if (typeof Chart === 'undefined') {
@@ -408,7 +405,7 @@ const WEEKLY_CATEGORIES = ['課業', '工作', '聚會', '出遊'];
 function addWeeklyItemRow() {
   const row = document.createElement('div');
   row.className = 'weekly-item-row';
-  row.dataset.burden = '60';
+  row.dataset.burden = '30';
   row.innerHTML = `
     <div class="weekly-item-top">
       <input type="text" placeholder="事項名稱">
@@ -418,7 +415,7 @@ function addWeeklyItemRow() {
     <div class="weekly-item-burden">
       <div class="burden-header">
         <span class="burden-label">強度</span>
-        <span class="progress-percent w-burden-display">60</span>
+        <span class="progress-percent w-burden-display">30</span>
       </div>
       <div class="dot-scale-10">
         ${Array.from({ length: 5 }).map((_, i) => `<button type="button" class="dot-10 ${i < 3 ? 'filled' : ''}" data-weekly-dot="${i + 1}"></button>`).join('')}
@@ -430,9 +427,9 @@ function addWeeklyItemRow() {
   row.querySelectorAll('[data-weekly-dot]').forEach((dotBtn) => {
     dotBtn.addEventListener('click', () => {
       const dots = Number(dotBtn.dataset.weeklyDot);
-      row.dataset.burden = String(dots * 20);
+      row.dataset.burden = String(dots * 10);
       row.querySelectorAll('.dot-10').forEach((d, idx) => d.classList.toggle('filled', idx < dots));
-      row.querySelector('.w-burden-display').textContent = dots * 20;
+      row.querySelector('.w-burden-display').textContent = dots * 10;
     });
   });
 }
@@ -444,7 +441,7 @@ document.getElementById('btnSaveWeeklyPlan').addEventListener('click', async () 
     const titleInput = row.querySelector('input[type="text"]');
     const category = row.querySelector('.w-category').value;
     const event_date = row.querySelector('.w-date').value;
-    const burden = Number(row.dataset.burden) || 60;
+    const burden = Number(row.dataset.burden) || 30;
     if (titleInput.value.trim() && event_date) {
       items.push({ title: titleInput.value.trim(), category, event_date, initial_burden: burden });
     }
