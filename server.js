@@ -48,14 +48,17 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 清掉已經過期的 acute 事件（自動刪除）
+// 過期的 acute 事件：不再直接刪除，改標記為已解決，留在「本週已離開的心理負擔」
 async function cleanupExpiredAcuteEvents() {
   const { rows } = await pool.query(
     `SELECT * FROM events WHERE type = 'acute' AND status = 'active'`
   );
   const expiredIds = rows.filter((e) => isAcuteExpired(e)).map((e) => e.id);
   if (expiredIds.length > 0) {
-    await pool.query('DELETE FROM events WHERE id = ANY($1::int[])', [expiredIds]);
+    await pool.query(
+      `UPDATE events SET status = 'resolved', resolved_at = now() WHERE id = ANY($1::int[])`,
+      [expiredIds]
+    );
   }
 }
 
@@ -127,6 +130,22 @@ app.patch('/api/events/:id/resolve', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '更新事件失敗' });
+  }
+});
+
+// 本週已離開的心理負擔（本週內被標記已解決 / 已淡化完畢的事件）
+app.get('/api/events/departed', async (req, res) => {
+  const weekStart = mondayOf(new Date());
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM events WHERE status = 'resolved' AND type != 'effort' AND resolved_at >= $1
+       ORDER BY resolved_at DESC`,
+      [weekStart]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '讀取已離開的心理負擔失敗' });
   }
 });
 
@@ -225,6 +244,16 @@ app.patch('/api/notes/:id/triage', async (req, res) => {
   }
 });
 
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM quick_notes WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '刪除隨手記失敗' });
+  }
+});
+
 // ================= GROWTH STATS（六軸成長，合併呈現於儀表板）=================
 app.get('/api/growth/summary', async (req, res) => {
   try {
@@ -271,14 +300,7 @@ app.post('/api/weekly-plan', async (req, res) => {
       [weekStart, JSON.stringify(itemsWithDefaults), JSON.stringify(histogram)]
     );
 
-    for (const item of itemsWithDefaults) {
-      await pool.query(
-        `INSERT INTO events (type, title, category, initial_burden, decay_speed, event_date)
-         VALUES ('acute', $1, $2, $3, $4, $5)`,
-        [item.title, item.category, item.initial_burden ?? 15, item.decay_speed, item.event_date]
-      );
-    }
-
+    // 注意：本週規劃純粹是視覺化預測，不會建立真正的事件、也不會影響「事件」列表或即時餘裕值
     res.status(201).json({ week_start: weekStart, items: itemsWithDefaults, predicted_curve: histogram });
   } catch (err) {
     console.error(err);

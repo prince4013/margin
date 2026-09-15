@@ -1,8 +1,9 @@
 const API = '/api';
 const GROWTH_LABELS = {
-  skill: '專業技能力', stamina: '體力', mental: '精神穩定度',
-  knowledge: '知識力', life: '生活穩定度', economic: '經濟力',
+  skill: '專業技能力', economic: '經濟力', knowledge: '知識力',
+  stamina: '體力', mental: '精神穩定度', life: '生活穩定度',
 };
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 const TYPE_LABELS = { acute: '急性情緒', chronic: '慢性壓力', todo: '待辦清單' };
 const DECAY_LABELS = { fast: '快', medium: '中', long: '長' };
 
@@ -59,6 +60,10 @@ async function loadDashboard() {
     const margin = await api('/margin');
     document.getElementById('marginNumber').textContent = margin.margin;
     document.getElementById('breathingRing').style.setProperty('--pct', margin.margin);
+
+    const now = new Date();
+    document.getElementById('heroDate').textContent =
+      `${now.getMonth() + 1}月${now.getDate()}日 星期${WEEKDAY_LABELS[now.getDay()]}`;
 
     const captions = [
       [0, 20, '餘裕偏低，先照顧好自己，別急著做更多事。'],
@@ -168,9 +173,9 @@ async function loadEvents() {
   const list = document.getElementById('eventList');
   if (events.length === 0) {
     list.innerHTML = '<p class="panel-hint">目前沒有進行中的事件。</p>';
-    return;
+  } else {
+    list.innerHTML = events.map(renderEventCard).join('');
   }
-  list.innerHTML = events.map(renderEventCard).join('');
 
   list.querySelectorAll('[data-resolve-id]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -183,6 +188,31 @@ async function loadEvents() {
       const [eventId, dotIndex] = dotBtn.dataset.dot.split(':');
       await api(`/events/${eventId}/progress`, { method: 'PATCH', body: JSON.stringify({ dots: Number(dotIndex) }) });
       await loadEvents(); await loadDashboard();
+    });
+  });
+
+  await loadDepartedEvents();
+}
+
+async function loadDepartedEvents() {
+  const departed = await api('/events/departed');
+  const list = document.getElementById('departedList');
+  if (departed.length === 0) {
+    list.innerHTML = '<p class="panel-hint">這週還沒有離開的心理負擔。</p>';
+    return;
+  }
+  list.innerHTML = departed.map((e) => `
+    <div class="event-card">
+      <div class="event-card-head"><span class="event-title">${escapeHtml(e.title)}</span></div>
+      <div class="event-meta">${TYPE_LABELS[e.type] || e.type} · ${escapeHtml(e.category)} · 離開於 ${e.resolved_at ? e.resolved_at.slice(0, 10) : ''}</div>
+      <div class="event-actions"><button class="btn-ghost small" data-departed-delete="${e.id}">刪除</button></div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('[data-departed-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/events/${btn.dataset.departedDelete}`, { method: 'DELETE' });
+      await loadDepartedEvents();
     });
   });
 }
@@ -245,8 +275,16 @@ async function loadCompletions() {
   list.innerHTML = rows.map((r) => `
     <li>
       <span>${escapeHtml(r.title)}<div class="item-meta">${escapeHtml(r.category)} · ${r.event_date ? r.event_date.slice(0, 10) : ''}</div></span>
+      <button data-delete-completion="${r.id}">刪除</button>
     </li>
   `).join('') || '<li>還沒有完成紀錄。</li>';
+
+  list.querySelectorAll('[data-delete-completion]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/events/${btn.dataset.deleteCompletion}`, { method: 'DELETE' });
+      await loadCompletions(); await loadDashboard();
+    });
+  });
 }
 
 // ---------- 隨手記 ----------
@@ -268,14 +306,23 @@ async function loadNotes() {
     <li><span>${escapeHtml(n.content)}</span><button data-triage="${n.id}">已整理</button></li>
   `).join('') || '<li>目前沒有待整理的想法。</li>';
 
-  document.getElementById('triagedList').innerHTML = triaged.slice(0, 10).map((n) => `
-    <li><span>${escapeHtml(n.content)}</span></li>
+  document.getElementById('triagedList').innerHTML = triaged.slice(0, 20).map((n) => `
+    <li>
+      <span>${escapeHtml(n.content)}<div class="item-meta">${(n.triaged_at || n.created_at).slice(0, 10)}</div></span>
+      <button data-delete-note="${n.id}">刪除</button>
+    </li>
   `).join('') || '<li>還沒有已整理的紀錄。</li>';
 
   document.querySelectorAll('[data-triage]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       await api(`/notes/${btn.dataset.triage}/triage`, { method: 'PATCH' });
       await loadNotes(); await loadDashboard();
+    });
+  });
+  document.querySelectorAll('[data-delete-note]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/notes/${btn.dataset.deleteNote}`, { method: 'DELETE' });
+      await loadNotes();
     });
   });
 }
