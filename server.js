@@ -348,7 +348,6 @@ app.post('/api/weekly-plan', async (req, res) => {
   const itemsWithDefaults = items.map((it) => ({
     id: it.id || crypto.randomUUID(),
     ...it,
-    decay_speed: it.decay_speed || 'medium',
   }));
 
   try {
