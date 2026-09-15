@@ -450,6 +450,19 @@ app.get('/api/margin/trend', async (req, res) => {
   }
 });
 
+// ================= 測試用途：清空所有使用者資料，保留活動建議清單 =================
+app.post('/api/reset-test-data', async (req, res) => {
+  try {
+    await pool.query(
+      'TRUNCATE TABLE events, growth_stats, quick_notes, daily_margin, weekly_plans, milestones RESTART IDENTITY CASCADE'
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('清空測試資料失敗', err);
+    res.status(500).json({ error: '清空測試資料失敗：' + err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

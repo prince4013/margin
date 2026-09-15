@@ -181,6 +181,19 @@ document.getElementById('btnDismissSuggestion').addEventListener('click', () => 
   document.getElementById('suggestionCard').classList.add('hidden');
 });
 
+document.getElementById('btnResetTestData').addEventListener('click', async () => {
+  if (!confirm('確定要清空所有測試資料嗎？事件、完成清單、隨手記、本週規劃、餘裕歷史都會被刪除，無法復原。')) return;
+  if (!confirm('再次確認：真的要全部清空嗎？')) return;
+  try {
+    await api('/reset-test-data', { method: 'POST' });
+    await loadDashboard();
+    alert('已清空所有測試資料。');
+  } catch (err) {
+    console.error('清空測試資料失敗', err);
+    alert('清空失敗：' + err.message);
+  }
+});
+
 // ---------- 事件（負擔） ----------
 function updateEventFormVisibility() {
   const type = document.getElementById('ev-type').value;
@@ -403,11 +416,13 @@ function addWeeklyItemRow() {
       <input type="date" class="w-date" value="${todayStr()}">
     </div>
     <div class="weekly-item-burden">
-      <span class="burden-label">強度</span>
+      <div class="burden-header">
+        <span class="burden-label">強度</span>
+        <span class="progress-percent w-burden-display">50</span>
+      </div>
       <div class="dot-scale-10">
         ${Array.from({ length: 10 }).map((_, i) => `<button type="button" class="dot-10 ${i < 5 ? 'filled' : ''}" data-weekly-dot="${i + 1}"></button>`).join('')}
       </div>
-      <span class="progress-percent w-burden-display">50</span>
     </div>
   `;
   document.getElementById('weeklyItemRows').appendChild(row);
