@@ -123,7 +123,10 @@ async function loadRandomSuggestion(category) {
 
 async function loadTrend() {
   const rows = await api('/margin/trend?days=14');
-  const labels = rows.map((r) => r.date.slice(5));
+  const labels = rows.map((r) => {
+    const [, month, day] = r.date.slice(0, 10).split('-');
+    return `${day}-${month}`;
+  });
   const data = rows.map((r) => Number(r.margin));
   const ctx = document.getElementById('trendChart');
   if (typeof Chart === 'undefined') {
@@ -164,6 +167,9 @@ function updateEventFormVisibility() {
 }
 document.getElementById('ev-type').addEventListener('change', updateEventFormVisibility);
 document.getElementById('ev-date').value = todayStr();
+document.getElementById('ev-burden').addEventListener('input', (e) => {
+  document.getElementById('ev-burden-value').textContent = e.target.value;
+});
 
 document.getElementById('eventForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -179,6 +185,7 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
     await api('/events', { method: 'POST', body: JSON.stringify(payload) });
     e.target.reset();
     document.getElementById('ev-date').value = todayStr();
+    document.getElementById('ev-burden-value').textContent = document.getElementById('ev-burden').value;
     updateEventFormVisibility();
     await loadEvents(); await loadDashboard();
   } catch (err) {
@@ -395,6 +402,7 @@ document.getElementById('btnSaveWeeklyPlan').addEventListener('click', async () 
   try {
     const result = await api('/weekly-plan', { method: 'POST', body: JSON.stringify({ items }) });
     renderWeeklyChart(result.predicted_curve);
+    renderWeeklyItemsList(result.items);
     await loadDashboard();
   } catch (err) {
     console.error('儲存本週規劃失敗', err);
@@ -406,7 +414,39 @@ async function loadWeeklyPlan() {
   document.getElementById('weeklyItemRows').innerHTML = '';
   addWeeklyItemRow();
   const plan = await api('/weekly-plan/current');
-  if (plan) renderWeeklyChart(plan.predicted_curve);
+  if (plan) {
+    renderWeeklyChart(plan.predicted_curve);
+    renderWeeklyItemsList(plan.items || []);
+  } else {
+    renderWeeklyItemsList([]);
+  }
+}
+
+function renderWeeklyItemsList(items) {
+  const list = document.getElementById('weeklyItemsList');
+  if (!items || items.length === 0) {
+    list.innerHTML = '<li>目前還沒有已規劃的事項。</li>';
+    return;
+  }
+  list.innerHTML = items.map((it) => `
+    <li>
+      <span>${escapeHtml(it.title)}<div class="item-meta">${escapeHtml(it.category)} · ${(it.event_date || '').slice(0, 10)} · 負擔強度 ${it.initial_burden}</div></span>
+      <button data-delete-weekly-item="${it.id}">刪除</button>
+    </li>
+  `).join('');
+
+  list.querySelectorAll('[data-delete-weekly-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const updated = await api(`/weekly-plan/current/items/${btn.dataset.deleteWeeklyItem}`, { method: 'DELETE' });
+        renderWeeklyChart(updated.predicted_curve);
+        renderWeeklyItemsList(updated.items);
+      } catch (err) {
+        console.error('刪除規劃事項失敗', err);
+        alert('刪除失敗：' + err.message);
+      }
+    });
+  });
 }
 
 let weeklyChart;

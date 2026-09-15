@@ -129,6 +129,11 @@ body {
   border: 1px solid var(--border);
   background: var(--paper);
 }
+.field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.field span#ev-burden-value { color: var(--accent-dark); font-weight: 500; }
 
 .inline-form { display: flex; gap: 10px; }
 .inline-form input {

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db/pool');
@@ -17,6 +18,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
+// ============================================================
+// 🎛️ 數值控制台：想調整餘裕/成長相關的基本數值，都在這個區塊
+// ============================================================
 const GROWTH_CATEGORIES = ['skill', 'stamina', 'mental', 'knowledge', 'life', 'economic'];
 // 完成清單分類 -> 成長軸線對應
 const COMPLETION_TO_GROWTH = {
@@ -28,6 +32,13 @@ const COMPLETION_TO_GROWTH = {
   '家事財務': 'life',
 };
 const WEEKLY_CATEGORIES = ['課業', '工作', '聚會', '出遊'];
+
+// 「輕盈程度」對應的餘裕加成幅度（分數越高，當下餘裕值多回來的越多，且淡化較慢）
+const LIGHTNESS_MAP = { small: 5, medium: 12, large: 20 };
+// 每記錄一次完成，成長軸要累加多少分數（目前不分輕盈程度，一律 +1）
+const GROWTH_AMOUNT_PER_COMPLETION = 1;
+// 隨手記每筆未整理想法佔用的負擔分數、以及整體上限，實際套用位置在 lib/calc.js 的 computeMargin()
+// ============================================================
 
 async function migrate() {
   const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
@@ -160,7 +171,6 @@ app.delete('/api/events/:id', async (req, res) => {
 });
 
 // ================= 完成清單（effort 型，獨立列表）=================
-const LIGHTNESS_MAP = { small: 5, medium: 12, large: 20 };
 
 app.get('/api/completions', async (req, res) => {
   try {
@@ -192,8 +202,8 @@ app.post('/api/completions', async (req, res) => {
       [title, category, magnitude, evDate]
     );
     await client.query(
-      'INSERT INTO growth_stats (category, amount, note) VALUES ($1, 1, $2)',
-      [growthCategory, title]
+      'INSERT INTO growth_stats (category, amount, note) VALUES ($1, $2, $3)',
+      [growthCategory, GROWTH_AMOUNT_PER_COMPLETION, title]
     );
     await client.query('COMMIT');
     res.status(201).json(rows[0]);
@@ -225,8 +235,8 @@ app.delete('/api/completions/:id', async (req, res) => {
     if (growthCategory) {
       // 刪除完成項目時，連動扣回當初累加的成長分數
       await client.query(
-        'INSERT INTO growth_stats (category, amount, note) VALUES ($1, -1, $2)',
-        [growthCategory, `刪除：${completion.title}`]
+        'INSERT INTO growth_stats (category, amount, note) VALUES ($1, $2, $3)',
+        [growthCategory, -GROWTH_AMOUNT_PER_COMPLETION, `刪除：${completion.title}`]
       );
     }
     await client.query('COMMIT');
@@ -335,7 +345,11 @@ app.post('/api/weekly-plan', async (req, res) => {
     .sort((a, b) => a - b)[0] || new Date();
   const weekStartDate = mondayOf(earliestDate);
   const weekStart = weekStartDate.toISOString().slice(0, 10);
-  const itemsWithDefaults = items.map((it) => ({ ...it, decay_speed: it.decay_speed || 'medium' }));
+  const itemsWithDefaults = items.map((it) => ({
+    id: it.id || crypto.randomUUID(),
+    ...it,
+    decay_speed: it.decay_speed || 'medium',
+  }));
 
   try {
     const histogram = computeWeeklyBurdenHistogram(itemsWithDefaults, weekStartDate);
@@ -352,6 +366,32 @@ app.post('/api/weekly-plan', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '儲存本週規劃失敗：' + err.message });
+  }
+});
+
+// 刪除本週規劃裡的單一事項，並重新計算剩餘事項的負擔分布
+app.delete('/api/weekly-plan/current/items/:itemId', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM weekly_plans ORDER BY week_start DESC LIMIT 1');
+    const plan = rows[0];
+    if (!plan) return res.status(404).json({ error: '找不到本週規劃' });
+
+    const remainingItems = (plan.items || []).filter((it) => it.id !== req.params.itemId);
+    const weekStartDate = new Date(plan.week_start);
+    const histogram = computeWeeklyBurdenHistogram(remainingItems, weekStartDate);
+
+    if (remainingItems.length === 0) {
+      await pool.query('DELETE FROM weekly_plans WHERE week_start = $1', [plan.week_start]);
+    } else {
+      await pool.query(
+        'UPDATE weekly_plans SET items = $1, predicted_curve = $2 WHERE week_start = $3',
+        [JSON.stringify(remainingItems), JSON.stringify(histogram), plan.week_start]
+      );
+    }
+    res.json({ week_start: plan.week_start, items: remainingItems, predicted_curve: histogram });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '刪除本週規劃項目失敗：' + err.message });
   }
 });
 

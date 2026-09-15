@@ -103,8 +103,8 @@
           </label>
 
           <label class="field">
-            <span>初始負擔強度（1–100）</span>
-            <input type="number" id="ev-burden" min="1" max="100" value="20">
+            <span>初始負擔強度：<span id="ev-burden-value">20</span></span>
+            <input type="range" id="ev-burden" min="1" max="100" value="20">
           </label>
 
           <label class="field" id="field-decay">
@@ -205,6 +205,11 @@
         <h2 class="panel-title">本週負擔分布（週一–週日）</h2>
         <p class="panel-hint">長條越高，代表那天預期的心理負擔越重。</p>
         <canvas id="weeklyChart" height="160"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">本週已規劃事項</h2>
+        <ul class="note-list" id="weeklyItemsList"></ul>
       </div>
     </section>
 
