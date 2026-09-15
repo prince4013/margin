@@ -99,6 +99,27 @@ async function loadDashboard() {
   } catch (err) {
     console.error('讀取成長軸失敗', err);
   }
+
+  try {
+    await loadTodaySchedule();
+  } catch (err) {
+    console.error('讀取今天的行程失敗', err);
+  }
+}
+
+async function loadTodaySchedule() {
+  const plan = await api('/weekly-plan/current');
+  const list = document.getElementById('todayScheduleList');
+  const items = (plan && plan.items ? plan.items : []).filter(
+    (it) => (it.event_date || '').slice(0, 10) === todayStr()
+  );
+  if (items.length === 0) {
+    list.innerHTML = '<li>目前沒有本週規劃裡標記在今天的事項。</li>';
+    return;
+  }
+  list.innerHTML = items.map((it) => `
+    <li><span>${escapeHtml(it.title)}<div class="item-meta">${escapeHtml(it.category)}</div></span></li>
+  `).join('');
 }
 
 function renderBreakdown(breakdown) {
@@ -374,13 +395,31 @@ const WEEKLY_CATEGORIES = ['課業', '工作', '聚會', '出遊'];
 function addWeeklyItemRow() {
   const row = document.createElement('div');
   row.className = 'weekly-item-row';
+  row.dataset.burden = '50';
   row.innerHTML = `
-    <input type="text" placeholder="事項名稱">
-    <select class="w-category">${WEEKLY_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
-    <input type="date" class="w-date" value="${todayStr()}">
-    <input type="number" class="w-burden" placeholder="強度" min="1" max="100" value="15">
+    <div class="weekly-item-top">
+      <input type="text" placeholder="事項名稱">
+      <select class="w-category">${WEEKLY_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+      <input type="date" class="w-date" value="${todayStr()}">
+    </div>
+    <div class="weekly-item-burden">
+      <span class="burden-label">強度</span>
+      <div class="dot-scale-10">
+        ${Array.from({ length: 10 }).map((_, i) => `<button type="button" class="dot-10 ${i < 5 ? 'filled' : ''}" data-weekly-dot="${i + 1}"></button>`).join('')}
+      </div>
+      <span class="progress-percent w-burden-display">50</span>
+    </div>
   `;
   document.getElementById('weeklyItemRows').appendChild(row);
+
+  row.querySelectorAll('[data-weekly-dot]').forEach((dotBtn) => {
+    dotBtn.addEventListener('click', () => {
+      const dots = Number(dotBtn.dataset.weeklyDot);
+      row.dataset.burden = String(dots * 10);
+      row.querySelectorAll('.dot-10').forEach((d, idx) => d.classList.toggle('filled', idx < dots));
+      row.querySelector('.w-burden-display').textContent = dots * 10;
+    });
+  });
 }
 document.getElementById('btnAddWeeklyItem').addEventListener('click', addWeeklyItemRow);
 
@@ -390,7 +429,7 @@ document.getElementById('btnSaveWeeklyPlan').addEventListener('click', async () 
     const titleInput = row.querySelector('input[type="text"]');
     const category = row.querySelector('.w-category').value;
     const event_date = row.querySelector('.w-date').value;
-    const burden = Number(row.querySelector('.w-burden').value) || 15;
+    const burden = Number(row.dataset.burden) || 50;
     if (titleInput.value.trim() && event_date) {
       items.push({ title: titleInput.value.trim(), category, event_date, initial_burden: burden });
     }
@@ -403,12 +442,16 @@ document.getElementById('btnSaveWeeklyPlan').addEventListener('click', async () 
     const result = await api('/weekly-plan', { method: 'POST', body: JSON.stringify({ items }) });
     renderWeeklyChart(result.predicted_curve);
     renderWeeklyItemsList(result.items);
+    document.getElementById('weeklyItemRows').innerHTML = '';
+    addWeeklyItemRow();
     await loadDashboard();
   } catch (err) {
     console.error('儲存本週規劃失敗', err);
     alert('儲存本週規劃失敗：' + err.message);
   }
 });
+
+const EMPTY_HISTOGRAM = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 };
 
 async function loadWeeklyPlan() {
   document.getElementById('weeklyItemRows').innerHTML = '';
@@ -418,6 +461,7 @@ async function loadWeeklyPlan() {
     renderWeeklyChart(plan.predicted_curve);
     renderWeeklyItemsList(plan.items || []);
   } else {
+    renderWeeklyChart(EMPTY_HISTOGRAM);
     renderWeeklyItemsList([]);
   }
 }

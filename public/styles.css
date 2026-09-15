@@ -178,15 +178,28 @@ body {
 
 /* ===== Weekly plan ===== */
 .weekly-item-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.weekly-item-top {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 0.8fr;
+  grid-template-columns: 1.4fr 1fr 1fr;
   gap: 8px;
   margin-bottom: 10px;
 }
-.weekly-item-row select, .weekly-item-row input {
+.weekly-item-top select, .weekly-item-top input {
   font-family: var(--font-body); font-size: 13px; padding: 8px 10px;
   border-radius: var(--radius-md); border: 1px solid var(--border);
   background: var(--paper); color: var(--ink);
+}
+.weekly-item-burden { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.burden-label { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+@media (max-width: 420px) {
+  .weekly-item-top { grid-template-columns: 1fr 1fr; }
+  .weekly-item-top input[type="text"] { grid-column: 1 / -1; }
 }
 
 /* ===== Breakdown list ===== */
@@ -218,9 +231,4 @@ body {
 @media (min-width: 700px) {
   .tabbar { position: static; margin-top: 20px; border-top: none; justify-content: flex-start; gap: 6px; padding: 0 20px 20px; }
   .app-shell { padding-bottom: 20px; }
-  .weekly-item-row { grid-template-columns: 1.6fr 1fr 1fr 0.9fr; }
-}
-
-@media (max-width: 420px) {
-  .weekly-item-row { grid-template-columns: 1fr 1fr; }
 }
