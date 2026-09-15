@@ -206,6 +206,40 @@ app.post('/api/completions', async (req, res) => {
   }
 });
 
+app.delete('/api/completions/:id', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT * FROM events WHERE id = $1 AND type = 'effort'`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: '找不到這筆完成項目' });
+    }
+    const completion = rows[0];
+    await client.query('DELETE FROM events WHERE id = $1', [req.params.id]);
+
+    const growthCategory = COMPLETION_TO_GROWTH[completion.category];
+    if (growthCategory) {
+      // 刪除完成項目時，連動扣回當初累加的成長分數
+      await client.query(
+        'INSERT INTO growth_stats (category, amount, note) VALUES ($1, -1, $2)',
+        [growthCategory, `刪除：${completion.title}`]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('刪除完成項目失敗', err);
+    res.status(500).json({ error: '刪除完成項目失敗：' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ================= QUICK NOTES（隨手記）=================
 app.get('/api/notes', async (req, res) => {
   const untriagedOnly = req.query.untriaged === 'true';

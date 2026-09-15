@@ -126,6 +126,10 @@ async function loadTrend() {
   const labels = rows.map((r) => r.date.slice(5));
   const data = rows.map((r) => Number(r.margin));
   const ctx = document.getElementById('trendChart');
+  if (typeof Chart === 'undefined') {
+    console.error('Chart.js 尚未載入，略過趨勢圖繪製');
+    return;
+  }
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   if (trendChart) trendChart.destroy();
   trendChart = new Chart(ctx, {
@@ -142,7 +146,7 @@ async function loadGrowthOnDashboard() {
   row.innerHTML = Object.keys(GROWTH_LABELS).map((cat) => `
     <div class="growth-stat">
       <span class="growth-label">${GROWTH_LABELS[cat]}</span>
-      <div class="growth-bar"><div class="growth-bar-fill" style="width:${(totals[cat] / max) * 100}%"></div></div>
+      <div class="growth-bar"><div class="growth-bar-fill" style="width:${Math.max(0, totals[cat] / max) * 100}%"></div></div>
       <span class="growth-value">${totals[cat]}</span>
     </div>
   `).join('');
@@ -205,6 +209,13 @@ async function loadEvents() {
       await loadEvents(); await loadDashboard();
     });
   });
+  list.querySelectorAll('[data-delete-event]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('確定要刪除這筆事件嗎？')) return;
+      await api(`/events/${btn.dataset.deleteEvent}`, { method: 'DELETE' });
+      await loadEvents(); await loadDashboard();
+    });
+  });
 
   await loadDepartedEvents();
 }
@@ -262,6 +273,7 @@ function renderEventCard(e) {
       ${body}
       <div class="event-actions">
         ${showResolve ? `<button class="btn-ghost small" data-resolve-id="${e.id}">標記已解決</button>` : ''}
+        <button class="btn-ghost small" data-delete-event="${e.id}">刪除</button>
       </div>
     </div>
   `;
@@ -302,7 +314,8 @@ async function loadCompletions() {
 
   list.querySelectorAll('[data-delete-completion]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      await api(`/events/${btn.dataset.deleteCompletion}`, { method: 'DELETE' });
+      if (!confirm('刪除後，這筆帶來的成長分數也會一併扣回，確定嗎？')) return;
+      await api(`/completions/${btn.dataset.deleteCompletion}`, { method: 'DELETE' });
       await loadCompletions(); await loadDashboard();
     });
   });
@@ -399,6 +412,9 @@ async function loadWeeklyPlan() {
 let weeklyChart;
 function renderWeeklyChart(histogram) {
   const ctx = document.getElementById('weeklyChart');
+  if (typeof Chart === 'undefined') {
+    throw new Error('圖表元件（Chart.js）載入失敗，請重新整理頁面再試一次');
+  }
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   const labels = ['一', '二', '三', '四', '五', '六', '日'];
   const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
