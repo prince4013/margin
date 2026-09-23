@@ -7,10 +7,12 @@ CREATE TABLE IF NOT EXISTS entries (
   event_date DATE NOT NULL,
   description TEXT NOT NULL,
   intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5
+  kind VARCHAR(10) NOT NULL DEFAULT 'action', -- 'plan'(計畫/行程，藍) 或 'action'(今日行動，橘)，輸入當下由使用者明確選擇
   created_at TIMESTAMP DEFAULT now()
-  -- 「事前已知的計畫」還是「行程外的行動」由 event_date 跟 created_at 的日期差自動判斷，
-  -- 不另外存欄位：created_at 的日期 < event_date → 計畫（藍）；>= event_date → 行程外（橘）
 );
+
+-- 舊版可能沒有這個欄位，補上去且不影響既有資料
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'action';
 
 CREATE TABLE IF NOT EXISTS quick_notes (
   id SERIAL PRIMARY KEY,
@@ -20,10 +22,5 @@ CREATE TABLE IF NOT EXISTS quick_notes (
   triaged_at TIMESTAMP
 );
 
--- 六個向度各自在地圖上釘的一個真實地點（只需設定一次）
-CREATE TABLE IF NOT EXISTS building_locations (
-  dimension VARCHAR(20) PRIMARY KEY,
-  lat NUMERIC NOT NULL,
-  lng NUMERIC NOT NULL,
-  place_name TEXT
-);
+-- v3.1：City 頁改成靜態 2.5D 插畫，不再需要真實地點座標，building_locations 表不再使用
+-- （保留舊表不刪，避免舊部署升級時出錯；程式碼已不再讀寫它）

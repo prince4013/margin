@@ -1,6 +1,5 @@
 const API = '/api';
 const DIMENSIONS = Object.keys(DIM_CONFIG); // from buildings.js
-const GLASGOW = [55.8642, -4.2518];
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function escapeHtml(str) {
@@ -48,7 +47,7 @@ function initTabs() {
 function buildDimensionPicker(container, defaultDim) {
   container.dataset.selected = defaultDim || DIMENSIONS[0];
   container.innerHTML = DIMENSIONS.map((d) => `
-    <button type="button" class="dim-btn ${d === container.dataset.selected ? 'active' : ''}" data-dim="${d}">${DIM_CONFIG[d].label}</button>
+    <button type="button" class="dim-btn ${d === container.dataset.selected ? 'active' : ''}" data-dim="${d}">${DIM_CONFIG[d].labelEn}</button>
   `).join('');
   container.querySelectorAll('.dim-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -142,7 +141,9 @@ function renderHexChart(labels, totals, blues) {
   });
 }
 
-// ---------- 手動輸入 ----------
+// ---------- 輸入（今日行動 / 計畫行程）----------
+let entryKind = 'action';
+
 function initEntryForm() {
   const picker = document.getElementById('dimensionPicker');
   buildDimensionPicker(picker, DIMENSIONS[0]);
@@ -150,18 +151,28 @@ function initEntryForm() {
   buildIntensityDots(dots, document.getElementById('en-intensity-value'), 3);
   document.getElementById('en-date').value = todayStr();
 
+  document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      entryKind = btn.dataset.kind;
+      document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((b) => b.classList.toggle('active', b === btn));
+      document.getElementById('fieldEntryDate').classList.toggle('hidden', entryKind === 'action');
+      if (entryKind === 'plan') document.getElementById('en-date').value = tomorrowStr();
+    });
+  });
+
   document.getElementById('entryForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = {
       dimension: picker.dataset.selected,
-      event_date: document.getElementById('en-date').value || todayStr(),
+      event_date: entryKind === 'action' ? todayStr() : (document.getElementById('en-date').value || tomorrowStr()),
       description: document.getElementById('en-desc').value,
       intensity: Number(dots.dataset.value) || 3,
+      kind: entryKind,
     };
     try {
       await api('/entries', { method: 'POST', body: JSON.stringify(payload) });
       document.getElementById('en-desc').value = '';
-      document.getElementById('en-date').value = todayStr();
+      if (entryKind === 'plan') document.getElementById('en-date').value = tomorrowStr();
       await loadRecentEntries();
       await loadDashboard();
     } catch (err) {
@@ -170,12 +181,18 @@ function initEntryForm() {
   });
 }
 
+function tomorrowStr() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 async function loadRecentEntries() {
   const rows = await api('/entries');
   const list = document.getElementById('recentEntriesList');
-  list.innerHTML = rows.slice(0, 20).map((r) => `
+  list.innerHTML = rows.slice(0, 30).map((r) => `
     <li>
-      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].label} · ${r.event_date.slice(0, 10)} · 強度 ${r.intensity}</div></span>
+      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · ${r.event_date.slice(0, 10)} · 強度 ${r.intensity} · ${r.kind === 'plan' ? '計畫' : '今日行動'}</div></span>
       <button data-delete-entry="${r.id}">刪除</button>
     </li>
   `).join('') || '<li>還沒有紀錄。</li>';
@@ -189,111 +206,11 @@ async function loadRecentEntries() {
   });
 }
 
-// ---------- 城市 ----------
-let cityMap;
-let setupQueue = [];
-let setupIndex = 0;
-
+// ---------- 城市（靜態 2.5D 插畫，無互動）----------
 async function loadCity() {
-  const locations = await api('/building-locations');
-  const missing = DIMENSIONS.filter((d) => !locations[d]);
-
-  if (missing.length > 0) {
-    setupQueue = missing;
-    setupIndex = 0;
-    document.getElementById('citySetupPanel').classList.remove('hidden');
-    startCitySetupMap(locations);
-  } else {
-    document.getElementById('citySetupPanel').classList.add('hidden');
-    await renderCityBuildings(locations);
-  }
-}
-
-function ensureMap() {
-  if (cityMap) return cityMap;
-  cityMap = L.map('cityMap').setView(GLASGOW, 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(cityMap);
-  return cityMap;
-}
-
-function clearMapLayers() {
-  const map = ensureMap();
-  map.eachLayer((layer) => {
-    if (layer instanceof L.Marker) map.removeLayer(layer);
-  });
-}
-
-function startCitySetupMap() {
-  const map = ensureMap();
-  clearMapLayers();
-  document.getElementById('setupDimensionLabel').textContent = DIM_CONFIG[setupQueue[setupIndex]].label;
-
-  map.off('click');
-  map.on('click', async (e) => {
-    const dim = setupQueue[setupIndex];
-    try {
-      await api('/building-locations', {
-        method: 'POST',
-        body: JSON.stringify({ dimension: dim, lat: e.latlng.lat, lng: e.latlng.lng }),
-      });
-      setupIndex += 1;
-      if (setupIndex >= setupQueue.length) {
-        await loadCity();
-      } else {
-        document.getElementById('setupDimensionLabel').textContent = DIM_CONFIG[setupQueue[setupIndex]].label;
-      }
-    } catch (err) {
-      alert('儲存地點失敗：' + err.message);
-    }
-  });
-}
-
-async function renderCityBuildings(locations) {
-  const map = ensureMap();
-  clearMapLayers();
   const cumulative = await api('/cumulative');
-
-  DIMENSIONS.forEach((dim) => {
-    const loc = locations[dim];
-    if (!loc) return;
-    const level = cumulative[dim]?.level || 1;
-    const svg = buildingSVG(dim, level);
-    const icon = L.divIcon({
-      html: `<div style="text-align:center;"><div class="map-building-icon" style="width:34px;height:${Math.round(34 * (220 / 100))}px;margin:0 auto;">${svg}</div><div class="map-building-label">${DIM_CONFIG[dim].label}・${level}樓</div></div>`,
-      className: '',
-      iconSize: [80, 100],
-      iconAnchor: [40, 95],
-    });
-    const marker = L.marker([Number(loc.lat), Number(loc.lng)], { icon }).addTo(map);
-    marker.on('click', () => openBuildingDetail(dim, level));
-  });
-
-  const coords = DIMENSIONS.map((d) => locations[d]).filter(Boolean).map((l) => [Number(l.lat), Number(l.lng)]);
-  if (coords.length > 0) map.fitBounds(coords, { padding: [40, 40], maxZoom: 15 });
+  document.getElementById('citySceneContainer').innerHTML = citySceneSVG(cumulative);
 }
-
-async function openBuildingDetail(dim, level) {
-  const panel = document.getElementById('buildingDetailPanel');
-  panel.classList.remove('hidden');
-  document.getElementById('buildingDetailTitle').textContent = DIM_CONFIG[dim].label;
-  document.getElementById('buildingDetailIcon').innerHTML = buildingSVG(dim, level);
-  document.getElementById('buildingDetailLevel').textContent = `目前等級：${level} 樓`;
-
-  const entries = await api(`/entries?dimension=${dim}`);
-  const list = document.getElementById('buildingDetailList');
-  list.innerHTML = entries.map((e) => `
-    <li><span>${escapeHtml(e.description)}<div class="item-meta">${e.event_date.slice(0, 10)} · 強度 ${e.intensity}</div></span></li>
-  `).join('') || '<li>這個向度還沒有紀錄。</li>';
-
-  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-document.getElementById('btnCloseBuildingDetail').addEventListener('click', () => {
-  document.getElementById('buildingDetailPanel').classList.add('hidden');
-});
 
 // ---------- 隨手記 ----------
 function initNotesForm() {
@@ -341,8 +258,18 @@ async function loadNotes() {
 }
 
 let promoteNoteId = null;
+let promoteKind = 'action';
+document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    promoteKind = btn.dataset.kind;
+    document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((b) => b.classList.toggle('active', b === btn));
+  });
+});
+
 function openPromoteModal(noteId) {
   promoteNoteId = noteId;
+  promoteKind = 'action';
+  document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((b) => b.classList.toggle('active', b.dataset.kind === 'action'));
   document.getElementById('promote-date').value = todayStr();
   document.getElementById('promoteModal').classList.remove('hidden');
 }
@@ -359,6 +286,7 @@ document.getElementById('btnConfirmPromote').addEventListener('click', async () 
         dimension: picker.dataset.selected,
         event_date: document.getElementById('promote-date').value || todayStr(),
         intensity: Number(dots.dataset.value) || 3,
+        kind: promoteKind,
       }),
     });
     document.getElementById('promoteModal').classList.add('hidden');
@@ -375,8 +303,7 @@ document.getElementById('btnResetTestData').addEventListener('click', async () =
   if (!confirm('再次確認：真的要全部清空嗎？')) return;
   try {
     await api('/reset-test-data', { method: 'POST' });
-    cityMap = null;
-    document.getElementById('cityMap').innerHTML = '';
+    document.getElementById('citySceneContainer').innerHTML = '';
     alert('已清空所有測試資料。');
     await loadDashboard();
   } catch (err) {

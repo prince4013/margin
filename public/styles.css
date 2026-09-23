@@ -116,21 +116,13 @@ body {
 .note-list li .item-meta { font-size: 11px; color: var(--ink-faint); }
 .note-list li .item-actions { display: flex; gap: 6px; }
 
-/* ===== City ===== */
-.city-map-panel { padding: 0; overflow: hidden; }
-#cityMap { width: 100%; height: 420px; border-radius: var(--radius-lg); }
-.building-detail-head { display: flex; justify-content: space-between; align-items: center; }
-.building-detail-icon { width: 120px; margin: 12px auto; }
-.building-detail-icon svg { width: 100%; height: auto; display: block; }
-.building-detail-level { text-align: center; font-size: 14px; color: var(--ink-soft); margin: 0 0 14px; }
+/* ===== Input kind switch (今日行動 / 計畫行程) ===== */
+.input-kind-switch { display: flex; background: var(--paper); border-radius: 999px; padding: 3px; margin-bottom: 16px; }
+.input-kind-switch .seg-btn { flex: 1; }
 
-.leaflet-div-icon { background: transparent; border: none; }
-.map-building-icon svg { width: 100%; height: 100%; display: block; }
-.map-building-label {
-  font-size: 11px; font-family: var(--font-body); color: var(--ink);
-  background: var(--card); border-radius: 999px; padding: 1px 7px; white-space: nowrap;
-  border: 1px solid var(--border); text-align: center;
-}
+/* ===== City（靜態場景） ===== */
+.city-scene-panel { padding: 12px; }
+.city-scene-panel svg { width: 100%; height: auto; display: block; }
 
 /* ===== Modal ===== */
 .modal-overlay {

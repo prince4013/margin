@@ -20,18 +20,19 @@ async function migrate() {
 
 // ================= ENTRIES（六向度紀錄）=================
 app.post('/api/entries', async (req, res) => {
-  const { dimension, event_date, description, intensity } = req.body;
+  const { dimension, event_date, description, intensity, kind } = req.body;
   if (!calc.DIMENSIONS.includes(dimension)) {
     return res.status(400).json({ error: '向度不正確' });
   }
   if (!description || !event_date) {
     return res.status(400).json({ error: '缺少日期或描述' });
   }
+  const finalKind = kind === 'plan' ? 'plan' : 'action';
   try {
     const { rows } = await pool.query(
-      `INSERT INTO entries (dimension, event_date, description, intensity)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [dimension, event_date, description, intensity || 3]
+      `INSERT INTO entries (dimension, event_date, description, intensity, kind)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [dimension, event_date, description, intensity || 3, finalKind]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -41,14 +42,16 @@ app.post('/api/entries', async (req, res) => {
 });
 
 app.get('/api/entries', async (req, res) => {
-  const { dimension } = req.query;
+  const { dimension, upcoming } = req.query;
   try {
-    const { rows } = dimension
-      ? await pool.query(
-          'SELECT * FROM entries WHERE dimension = $1 ORDER BY event_date DESC, created_at DESC',
-          [dimension]
-        )
-      : await pool.query('SELECT * FROM entries ORDER BY event_date DESC, created_at DESC LIMIT 200');
+    const conditions = [];
+    const params = [];
+    if (dimension) { params.push(dimension); conditions.push(`dimension = $${params.length}`); }
+    if (upcoming === 'true') { conditions.push(`event_date > CURRENT_DATE`); }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const order = upcoming === 'true' ? 'ORDER BY event_date ASC' : 'ORDER BY event_date DESC, created_at DESC';
+    const limit = upcoming === 'true' ? '' : 'LIMIT 200';
+    const { rows } = await pool.query(`SELECT * FROM entries ${where} ${order} ${limit}`, params);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -164,10 +167,11 @@ app.delete('/api/notes/:id', async (req, res) => {
 
 // 把一筆隨手記轉成正式紀錄：帶 dimension/event_date/intensity 進來，內容沿用隨手記的文字
 app.post('/api/notes/:id/promote', async (req, res) => {
-  const { dimension, event_date, intensity } = req.body;
+  const { dimension, event_date, intensity, kind } = req.body;
   if (!calc.DIMENSIONS.includes(dimension) || !event_date) {
     return res.status(400).json({ error: '缺少向度或日期' });
   }
+  const finalKind = kind === 'plan' ? 'plan' : 'action';
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -178,9 +182,9 @@ app.post('/api/notes/:id/promote', async (req, res) => {
     }
     const note = noteRows[0];
     const { rows: entryRows } = await client.query(
-      `INSERT INTO entries (dimension, event_date, description, intensity)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [dimension, event_date, note.content, intensity || 3]
+      `INSERT INTO entries (dimension, event_date, description, intensity, kind)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [dimension, event_date, note.content, intensity || 3, finalKind]
     );
     await client.query('UPDATE quick_notes SET triaged = TRUE, triaged_at = now() WHERE id = $1', [req.params.id]);
     await client.query('COMMIT');
@@ -194,43 +198,10 @@ app.post('/api/notes/:id/promote', async (req, res) => {
   }
 });
 
-// ================= BUILDING LOCATIONS（城市地圖上六個向度的釘點）=================
-app.get('/api/building-locations', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM building_locations');
-    const map = {};
-    rows.forEach((r) => { map[r.dimension] = r; });
-    res.json(map);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '讀取地點失敗：' + err.message });
-  }
-});
-
-app.post('/api/building-locations', async (req, res) => {
-  const { dimension, lat, lng, place_name } = req.body;
-  if (!calc.DIMENSIONS.includes(dimension) || lat === undefined || lng === undefined) {
-    return res.status(400).json({ error: '缺少向度或座標' });
-  }
-  try {
-    const { rows } = await pool.query(
-      `INSERT INTO building_locations (dimension, lat, lng, place_name)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (dimension) DO UPDATE SET lat = $2, lng = $3, place_name = $4
-       RETURNING *`,
-      [dimension, lat, lng, place_name || null]
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '儲存地點失敗：' + err.message });
-  }
-});
-
 // ================= 測試用途：清空所有資料 =================
 app.post('/api/reset-test-data', async (req, res) => {
   try {
-    await pool.query('TRUNCATE TABLE entries, quick_notes, building_locations RESTART IDENTITY');
+    await pool.query('TRUNCATE TABLE entries, quick_notes RESTART IDENTITY');
     res.json({ ok: true });
   } catch (err) {
     console.error('清空測試資料失敗', err);

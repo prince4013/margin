@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -57,22 +56,25 @@
       </div>
     </section>
 
-    <!-- ===== 手動輸入 ===== -->
+    <!-- ===== 輸入 ===== -->
     <section class="view hidden" id="view-input">
       <div class="panel">
-        <h2 class="panel-title">記一筆</h2>
+        <div class="input-kind-switch">
+          <button class="seg-btn active" data-kind="action">今日行動</button>
+          <button class="seg-btn" data-kind="plan">計畫/行程</button>
+        </div>
         <form id="entryForm" class="form-grid">
           <label class="field">
             <span>向度</span>
             <div class="dimension-picker" id="dimensionPicker"></div>
           </label>
-          <label class="field">
+          <label class="field hidden" id="fieldEntryDate">
             <span>日期</span>
             <input type="date" id="en-date">
           </label>
           <label class="field">
             <span>內容描述</span>
-            <input type="text" id="en-desc" required placeholder="做了什麼？">
+            <input type="text" id="en-desc" required placeholder="做了什麼？／排定了什麼？">
           </label>
           <label class="field">
             <span>投入程度：<span id="en-intensity-value">3</span></span>
@@ -89,22 +91,7 @@
 
     <!-- ===== 城市 ===== -->
     <section class="view hidden" id="view-city">
-      <div class="panel" id="citySetupPanel">
-        <h2 class="panel-title">設定六個向度的地點</h2>
-        <p class="panel-hint" id="citySetupHint">在地圖上點一下，把「<span id="setupDimensionLabel"></span>」釘在對你有意義的地方。</p>
-      </div>
-      <div class="panel city-map-panel">
-        <div id="cityMap"></div>
-      </div>
-      <div id="buildingDetailPanel" class="panel hidden">
-        <div class="building-detail-head">
-          <h2 class="panel-title" id="buildingDetailTitle"></h2>
-          <button class="btn-ghost small" id="btnCloseBuildingDetail">關閉</button>
-        </div>
-        <div id="buildingDetailIcon" class="building-detail-icon"></div>
-        <p id="buildingDetailLevel" class="building-detail-level"></p>
-        <ul class="note-list" id="buildingDetailList"></ul>
-      </div>
+      <div class="panel city-scene-panel" id="citySceneContainer"></div>
     </section>
 
     <!-- ===== 隨手記 ===== -->
@@ -137,7 +124,7 @@
 
   <nav class="tabbar">
     <button class="tab-btn active" data-view="dashboard"><span>儀表板</span></button>
-    <button class="tab-btn" data-view="input"><span>手動輸入</span></button>
+    <button class="tab-btn" data-view="input"><span>輸入</span></button>
     <button class="tab-btn" data-view="city"><span>城市</span></button>
     <button class="tab-btn" data-view="notes"><span>隨手記</span></button>
   </nav>
@@ -148,6 +135,10 @@
 <div id="promoteModal" class="modal-overlay hidden">
   <div class="modal-card">
     <h3>轉為正式紀錄</h3>
+    <div class="input-kind-switch" id="promoteKindSwitch">
+      <button type="button" class="seg-btn active" data-kind="action">今日行動</button>
+      <button type="button" class="seg-btn" data-kind="plan">計畫/行程</button>
+    </div>
     <label class="field">
       <span>向度</span>
       <div class="dimension-picker" id="promoteDimensionPicker"></div>
@@ -168,7 +159,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/buildings.js"></script>
 <script src="/app.js"></script>
 </body>

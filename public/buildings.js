@@ -1,11 +1,11 @@
 // 六向度建築造型設定：每個向度固定一種造型 + 一組顏色，高度依等級變化
 const DIM_CONFIG = {
-  learning: { label: '學習', shape: 'plain', top: '#CECBF6', left: '#AFA9EC', right: '#7F77DD', stroke: '#534AB7' },
-  social: { label: '社交', shape: 'pyramid', top: '#F4C0D1', left: '#ED93B1', right: '#D4537E', stroke: '#993556' },
-  energy: { label: '能量', shape: 'dome', top: '#FAC775', left: '#EF9F27', right: '#BA7517', stroke: '#854F0B' },
-  economy: { label: '經濟', shape: 'tiered', top: '#9FE1CB', left: '#5DCAA5', right: '#1D9E75', stroke: '#0F6E56' },
-  exploration: { label: '探索', shape: 'lean', top: '#F5C4B3', left: '#F0997B', right: '#D85A30', stroke: '#993C1D' },
-  reflection: { label: '反思', shape: 'plain', top: '#D3D1C7', left: '#B4B2A9', right: '#888780', stroke: '#5F5E5A' },
+  learning: { label: '學習', labelEn: 'Learning', shape: 'plain', top: '#CECBF6', left: '#AFA9EC', right: '#7F77DD', stroke: '#534AB7' },
+  social: { label: '關係', labelEn: 'Relationship', shape: 'pyramid', top: '#F4C0D1', left: '#ED93B1', right: '#D4537E', stroke: '#993556' },
+  energy: { label: '能量', labelEn: 'Energy', shape: 'dome', top: '#FAC775', left: '#EF9F27', right: '#BA7517', stroke: '#854F0B' },
+  economy: { label: '經濟', labelEn: 'Economy', shape: 'tiered', top: '#9FE1CB', left: '#5DCAA5', right: '#1D9E75', stroke: '#0F6E56' },
+  exploration: { label: '探索', labelEn: 'Exploration', shape: 'lean', top: '#F5C4B3', left: '#F0997B', right: '#D85A30', stroke: '#993C1D' },
+  reflection: { label: '反思', labelEn: 'Reflection', shape: 'plain', top: '#D3D1C7', left: '#B4B2A9', right: '#888780', stroke: '#5F5E5A' },
 };
 
 function pts(arr) {
@@ -36,8 +36,8 @@ function floorLines(cx, dx, groundY, h, level, stroke) {
   return out;
 }
 
-// 產生一座建築的 SVG 字串，viewBox 固定 0 0 100 220，等級 1-12
-function buildingSVG(dimension, level) {
+// 產生一座建築「內部標記」的字串（不含外層 <svg>），方便嵌到更大的場景裡
+function buildingInnerMarkup(dimension, level) {
   const cfg = DIM_CONFIG[dimension];
   if (!cfg) return '';
   const cx = 50;
@@ -96,6 +96,44 @@ function buildingSVG(dimension, level) {
   }
 
   const lines = floorLines(cx, dx, groundY, h, level, cfg.stroke);
+  return shapeMarkup + lines;
+}
 
-  return `<svg viewBox="0 0 100 220" xmlns="http://www.w3.org/2000/svg">${shapeMarkup}${lines}</svg>`;
+// 產生一座建築獨立的 SVG 字串，viewBox 固定 0 0 100 220，等級 1-12
+function buildingSVG(dimension, level) {
+  return `<svg viewBox="0 0 100 220" xmlns="http://www.w3.org/2000/svg">${buildingInnerMarkup(dimension, level)}</svg>`;
+}
+
+// 把六座建築嵌進一個固定版面的城市場景（含克萊德河背景），純靜態展示用
+const CITY_LAYOUT = {
+  learning:    { cx: 110, cy: 260 },
+  social:      { cx: 300, cy: 210 },
+  energy:      { cx: 160, cy: 340 },
+  economy:     { cx: 480, cy: 300 },
+  exploration: { cx: 560, cy: 260 },
+  reflection:  { cx: 360, cy: 380 },
+};
+
+function citySceneSVG(levels) {
+  const W = 110;
+  const H = W * 2.2;
+  const buildingsMarkup = Object.keys(CITY_LAYOUT).map((dim) => {
+    const { cx, cy } = CITY_LAYOUT[dim];
+    const level = (levels && levels[dim] && levels[dim].level) || 1;
+    const x = cx - W / 2;
+    const y = cy - H;
+    return `
+      <svg x="${x}" y="${y}" width="${W}" height="${H}" viewBox="0 0 100 220">${buildingInnerMarkup(dim, level)}</svg>
+      <text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" fill="var(--ink-soft)">${DIM_CONFIG[dim].label}・${level}樓</text>
+    `;
+  }).join('');
+
+  return `
+    <svg width="100%" viewBox="0 0 680 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="格拉斯哥城市示意，六座建築沿克萊德河分布，高度代表等級">
+      <rect x="0" y="0" width="680" height="440" fill="var(--card)"/>
+      <path d="M -20 300 Q 220 260 360 305 T 700 280" stroke="var(--accent)" stroke-opacity="0.28" stroke-width="36" fill="none" stroke-linecap="round"/>
+      <line x1="0" y1="150" x2="680" y2="170" stroke="var(--border)" stroke-width="1"/>
+      ${buildingsMarkup}
+    </svg>
+  `;
 }
