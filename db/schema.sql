@@ -6,13 +6,15 @@ CREATE TABLE IF NOT EXISTS entries (
   dimension VARCHAR(20) NOT NULL,
   event_date DATE NOT NULL,
   description TEXT NOT NULL,
-  intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5
+  intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5，投入程度
+  satisfaction NUMERIC NOT NULL DEFAULT 3, -- 1-5，滿意度（不等於投入程度，兩者分開評）
   kind VARCHAR(10) NOT NULL DEFAULT 'action', -- 'plan'(計畫/行程，藍) 或 'action'(今日行動，橘)，輸入當下由使用者明確選擇
   created_at TIMESTAMP DEFAULT now()
 );
 
--- 舊版可能沒有這個欄位，補上去且不影響既有資料
+-- 舊版可能沒有這些欄位，補上去且不影響既有資料
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'action';
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS satisfaction NUMERIC NOT NULL DEFAULT 3;
 
 CREATE TABLE IF NOT EXISTS quick_notes (
   id SERIAL PRIMARY KEY,

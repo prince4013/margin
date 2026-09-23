@@ -115,6 +115,15 @@ async function loadDashboard() {
     } else {
       card.classList.add('hidden');
     }
+
+    const satCard = document.getElementById('satisfactionCard');
+    if (data.satisfactionAlert) {
+      satCard.classList.remove('hidden');
+      document.getElementById('satisfactionText').textContent =
+        `這期投入最多的是 ${DIM_CONFIG[data.satisfactionAlert.dimension].label}，但平均滿意度只有 ${data.satisfactionAlert.avgSatisfaction} 分，要不要想想是不是方法需要調整？`;
+    } else {
+      satCard.classList.add('hidden');
+    }
   } catch (err) {
     console.error('讀取儀表板失敗', err);
   }
@@ -149,14 +158,14 @@ function initEntryForm() {
   buildDimensionPicker(picker, DIMENSIONS[0]);
   const dots = document.getElementById('intensityDots');
   buildIntensityDots(dots, document.getElementById('en-intensity-value'), 3);
+  const satDots = document.getElementById('satisfactionDots');
+  buildIntensityDots(satDots, document.getElementById('en-satisfaction-value'), 3);
   document.getElementById('en-date').value = todayStr();
 
   document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((btn) => {
     btn.addEventListener('click', () => {
       entryKind = btn.dataset.kind;
       document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((b) => b.classList.toggle('active', b === btn));
-      document.getElementById('fieldEntryDate').classList.toggle('hidden', entryKind === 'action');
-      if (entryKind === 'plan') document.getElementById('en-date').value = tomorrowStr();
     });
   });
 
@@ -164,15 +173,16 @@ function initEntryForm() {
     e.preventDefault();
     const payload = {
       dimension: picker.dataset.selected,
-      event_date: entryKind === 'action' ? todayStr() : (document.getElementById('en-date').value || tomorrowStr()),
+      event_date: document.getElementById('en-date').value || todayStr(),
       description: document.getElementById('en-desc').value,
       intensity: Number(dots.dataset.value) || 3,
+      satisfaction: Number(satDots.dataset.value) || 3,
       kind: entryKind,
     };
     try {
       await api('/entries', { method: 'POST', body: JSON.stringify(payload) });
       document.getElementById('en-desc').value = '';
-      if (entryKind === 'plan') document.getElementById('en-date').value = tomorrowStr();
+      document.getElementById('en-date').value = todayStr();
       await loadRecentEntries();
       await loadDashboard();
     } catch (err) {
@@ -181,18 +191,14 @@ function initEntryForm() {
   });
 }
 
-function tomorrowStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
+
 
 async function loadRecentEntries() {
   const rows = await api('/entries');
   const list = document.getElementById('recentEntriesList');
   list.innerHTML = rows.slice(0, 30).map((r) => `
     <li>
-      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · ${r.event_date.slice(0, 10)} · 強度 ${r.intensity} · ${r.kind === 'plan' ? '計畫' : '今日行動'}</div></span>
+      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · ${r.event_date.slice(0, 10)} · 投入 ${r.intensity} · 滿意 ${r.satisfaction} · ${r.kind === 'plan' ? '計畫' : '今日行動'}</div></span>
       <button data-delete-entry="${r.id}">刪除</button>
     </li>
   `).join('') || '<li>還沒有紀錄。</li>';
@@ -206,11 +212,43 @@ async function loadRecentEntries() {
   });
 }
 
-// ---------- 城市（靜態 2.5D 插畫，無互動）----------
+// ---------- 城市（靜態 2.5D 插畫，點建築可看清單）----------
+let lastCumulative = null;
+
 async function loadCity() {
   const cumulative = await api('/cumulative');
-  document.getElementById('citySceneContainer').innerHTML = citySceneSVG(cumulative);
+  lastCumulative = cumulative;
+  const container = document.getElementById('citySceneContainer');
+  container.innerHTML = citySceneSVG(cumulative);
+  document.getElementById('buildingDetailPanel').classList.add('hidden');
+
+  container.querySelectorAll('[data-dim]').forEach((el) => {
+    el.addEventListener('click', () => openBuildingDetail(el.dataset.dim));
+  });
 }
+
+async function openBuildingDetail(dim) {
+  const panel = document.getElementById('buildingDetailPanel');
+  const level = lastCumulative && lastCumulative[dim] ? lastCumulative[dim].level : 1;
+  const satisfaction = lastCumulative && lastCumulative[dim] ? lastCumulative[dim].avgSatisfaction : 3;
+
+  panel.classList.remove('hidden');
+  document.getElementById('buildingDetailTitle').textContent = DIM_CONFIG[dim].label;
+  document.getElementById('buildingDetailIcon').innerHTML = buildingSVG(dim, level, satisfaction);
+  document.getElementById('buildingDetailLevel').textContent = `目前等級：${level} 樓 · 平均滿意度 ${satisfaction}`;
+
+  const entries = await api(`/entries?dimension=${dim}`);
+  const list = document.getElementById('buildingDetailList');
+  list.innerHTML = entries.map((e) => `
+    <li><span>${escapeHtml(e.description)}<div class="item-meta">${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · 滿意 ${e.satisfaction} · ${e.kind === 'plan' ? '計畫' : '今日行動'}</div></span></li>
+  `).join('') || '<li>這個向度還沒有紀錄。</li>';
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+document.getElementById('btnCloseBuildingDetail').addEventListener('click', () => {
+  document.getElementById('buildingDetailPanel').classList.add('hidden');
+});
 
 // ---------- 隨手記 ----------
 function initNotesForm() {
@@ -279,6 +317,7 @@ document.getElementById('btnCancelPromote').addEventListener('click', () => {
 document.getElementById('btnConfirmPromote').addEventListener('click', async () => {
   const picker = document.getElementById('promoteDimensionPicker');
   const dots = document.getElementById('promoteIntensityDots');
+  const satDots = document.getElementById('promoteSatisfactionDots');
   try {
     await api(`/notes/${promoteNoteId}/promote`, {
       method: 'POST',
@@ -286,6 +325,7 @@ document.getElementById('btnConfirmPromote').addEventListener('click', async () 
         dimension: picker.dataset.selected,
         event_date: document.getElementById('promote-date').value || todayStr(),
         intensity: Number(dots.dataset.value) || 3,
+        satisfaction: Number(satDots.dataset.value) || 3,
         kind: promoteKind,
       }),
     });
@@ -319,4 +359,5 @@ initEntryForm();
 initNotesForm();
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), DIMENSIONS[0]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);
+buildIntensityDots(document.getElementById('promoteSatisfactionDots'), document.getElementById('promote-satisfaction-value'), 3);
 loadDashboard();

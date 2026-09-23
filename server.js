@@ -20,7 +20,7 @@ async function migrate() {
 
 // ================= ENTRIES（六向度紀錄）=================
 app.post('/api/entries', async (req, res) => {
-  const { dimension, event_date, description, intensity, kind } = req.body;
+  const { dimension, event_date, description, intensity, satisfaction, kind } = req.body;
   if (!calc.DIMENSIONS.includes(dimension)) {
     return res.status(400).json({ error: '向度不正確' });
   }
@@ -30,9 +30,9 @@ app.post('/api/entries', async (req, res) => {
   const finalKind = kind === 'plan' ? 'plan' : 'action';
   try {
     const { rows } = await pool.query(
-      `INSERT INTO entries (dimension, event_date, description, intensity, kind)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [dimension, event_date, description, intensity || 3, finalKind]
+      `INSERT INTO entries (dimension, event_date, description, intensity, satisfaction, kind)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [dimension, event_date, description, intensity || 3, satisfaction || 3, finalKind]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -81,6 +81,7 @@ app.get('/api/dashboard', async (req, res) => {
     );
     const breakdown = calc.computePeriodBreakdown(rows, start, end);
     const imbalance = calc.computeImbalance(breakdown);
+    const satisfactionAlert = calc.computeSatisfactionAlert(breakdown);
     res.json({
       period: type,
       offset,
@@ -88,6 +89,7 @@ app.get('/api/dashboard', async (req, res) => {
       end: end.toISOString().slice(0, 10),
       breakdown,
       imbalance,
+      satisfactionAlert,
     });
   } catch (err) {
     console.error(err);
@@ -98,11 +100,12 @@ app.get('/api/dashboard', async (req, res) => {
 // ================= CUMULATIVE（城市：全時間累積 + 等級）=================
 app.get('/api/cumulative', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT dimension, intensity FROM entries');
+    const { rows } = await pool.query('SELECT dimension, intensity, satisfaction FROM entries');
     const cumulative = calc.computeCumulative(rows);
+    const avgSatisfaction = calc.computeCumulativeSatisfaction(rows);
     const withLevel = {};
     Object.keys(cumulative).forEach((d) => {
-      withLevel[d] = { cumulative: cumulative[d], ...calc.nextLevelInfo(cumulative[d]) };
+      withLevel[d] = { cumulative: cumulative[d], avgSatisfaction: avgSatisfaction[d], ...calc.nextLevelInfo(cumulative[d]) };
     });
     res.json(withLevel);
   } catch (err) {
@@ -167,7 +170,7 @@ app.delete('/api/notes/:id', async (req, res) => {
 
 // 把一筆隨手記轉成正式紀錄：帶 dimension/event_date/intensity 進來，內容沿用隨手記的文字
 app.post('/api/notes/:id/promote', async (req, res) => {
-  const { dimension, event_date, intensity, kind } = req.body;
+  const { dimension, event_date, intensity, satisfaction, kind } = req.body;
   if (!calc.DIMENSIONS.includes(dimension) || !event_date) {
     return res.status(400).json({ error: '缺少向度或日期' });
   }
@@ -182,9 +185,9 @@ app.post('/api/notes/:id/promote', async (req, res) => {
     }
     const note = noteRows[0];
     const { rows: entryRows } = await client.query(
-      `INSERT INTO entries (dimension, event_date, description, intensity, kind)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [dimension, event_date, note.content, intensity || 3, finalKind]
+      `INSERT INTO entries (dimension, event_date, description, intensity, satisfaction, kind)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [dimension, event_date, note.content, intensity || 3, satisfaction || 3, finalKind]
     );
     await client.query('UPDATE quick_notes SET triaged = TRUE, triaged_at = now() WHERE id = $1', [req.params.id]);
     await client.query('COMMIT');

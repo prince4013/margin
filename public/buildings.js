@@ -12,6 +12,32 @@ function pts(arr) {
   return arr.map((p) => p.join(',')).join(' ');
 }
 
+// ---- 顏色依滿意度調整飽和度：滿意度低 → 偏灰；滿意度高 → 原色飽和 ----
+function hexToRgb(hex) {
+  const v = hex.replace('#', '');
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
+}
+function rgbToHex([r, g, b]) {
+  return '#' + [r, g, b].map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
+}
+// satisfaction: 1-5，t=0 時偏灰、t=1 時全彩，最低也保留 25% 彩度避免整棟變死灰
+function satisfactionMix(hex, satisfaction) {
+  const s = satisfaction === undefined || satisfaction === null ? 3 : satisfaction;
+  const raw = (s - 1) / 4; // 1→0, 5→1
+  const t = 0.25 + 0.75 * Math.max(0, Math.min(1, raw));
+  const [r, g, b] = hexToRgb(hex);
+  const gray = (r + g + b) / 3;
+  return rgbToHex([gray + (r - gray) * t, gray + (g - gray) * t, gray + (b - gray) * t]);
+}
+function tintedColors(cfg, satisfaction) {
+  return {
+    top: satisfactionMix(cfg.top, satisfaction),
+    left: satisfactionMix(cfg.left, satisfaction),
+    right: satisfactionMix(cfg.right, satisfaction),
+    stroke: satisfactionMix(cfg.stroke, satisfaction),
+  };
+}
+
 // 畫一個基本的等角箱體，回傳三個面的座標點陣列
 function isoBox(cx, groundY, dx, dy, h) {
   const topY = groundY - 2 * dy - h;
@@ -37,9 +63,11 @@ function floorLines(cx, dx, groundY, h, level, stroke) {
 }
 
 // 產生一座建築「內部標記」的字串（不含外層 <svg>），方便嵌到更大的場景裡
-function buildingInnerMarkup(dimension, level) {
-  const cfg = DIM_CONFIG[dimension];
-  if (!cfg) return '';
+// satisfaction (1-5，選填) 會影響顏色飽和度：越滿意色彩越飽和，越不滿意越偏灰
+function buildingInnerMarkup(dimension, level, satisfaction) {
+  const base = DIM_CONFIG[dimension];
+  if (!base) return '';
+  const cfg = tintedColors(base, satisfaction);
   const cx = 50;
   const groundY = 195;
   const dx = 20;
@@ -48,13 +76,13 @@ function buildingInnerMarkup(dimension, level) {
   const box = isoBox(cx, groundY, dx, dy, h);
   let shapeMarkup = '';
 
-  if (cfg.shape === 'plain') {
+  if (base.shape === 'plain') {
     shapeMarkup = `
       <polygon points="${pts(box.leftFace)}" fill="${cfg.left}" stroke="${cfg.stroke}" stroke-width="1"/>
       <polygon points="${pts(box.rightFace)}" fill="${cfg.right}" stroke="${cfg.stroke}" stroke-width="1"/>
       <polygon points="${pts(box.topFace)}" fill="${cfg.top}" stroke="${cfg.stroke}" stroke-width="1"/>
     `;
-  } else if (cfg.shape === 'pyramid') {
+  } else if (base.shape === 'pyramid') {
     const rh = 22;
     const apex = [cx, box.topY - rh];
     shapeMarkup = `
@@ -63,14 +91,14 @@ function buildingInnerMarkup(dimension, level) {
       <polygon points="${pts([box.T, box.L, apex])}" fill="${cfg.top}" stroke="${cfg.stroke}" stroke-width="1"/>
       <polygon points="${pts([box.T, box.R, apex])}" fill="${cfg.left}" stroke="${cfg.stroke}" stroke-width="1"/>
     `;
-  } else if (cfg.shape === 'dome') {
+  } else if (base.shape === 'dome') {
     const rise = 30;
     shapeMarkup = `
       <polygon points="${pts(box.leftFace)}" fill="${cfg.left}" stroke="${cfg.stroke}" stroke-width="1"/>
       <polygon points="${pts(box.rightFace)}" fill="${cfg.right}" stroke="${cfg.stroke}" stroke-width="1"/>
       <path d="M${box.L[0]},${box.L[1]} Q${cx},${box.L[1] - rise} ${box.R[0]},${box.R[1]} Z" fill="${cfg.top}" stroke="${cfg.stroke}" stroke-width="1"/>
     `;
-  } else if (cfg.shape === 'lean') {
+  } else if (base.shape === 'lean') {
     const rh = 24;
     const apex = [cx - dx, box.topY + dy - rh];
     shapeMarkup = `
@@ -79,7 +107,7 @@ function buildingInnerMarkup(dimension, level) {
       <polygon points="${pts([box.T, box.L, apex])}" fill="${cfg.top}" stroke="${cfg.stroke}" stroke-width="1"/>
       <polygon points="${pts([box.T, apex, box.R])}" fill="${cfg.left}" stroke="${cfg.stroke}" stroke-width="1"/>
     `;
-  } else if (cfg.shape === 'tiered') {
+  } else if (base.shape === 'tiered') {
     const h1 = Math.round(h * 0.6);
     const h2 = h - h1;
     const box1 = isoBox(cx, groundY, dx, dy, h1);
@@ -100,8 +128,8 @@ function buildingInnerMarkup(dimension, level) {
 }
 
 // 產生一座建築獨立的 SVG 字串，viewBox 固定 0 0 100 220，等級 1-12
-function buildingSVG(dimension, level) {
-  return `<svg viewBox="0 0 100 220" xmlns="http://www.w3.org/2000/svg">${buildingInnerMarkup(dimension, level)}</svg>`;
+function buildingSVG(dimension, level, satisfaction) {
+  return `<svg viewBox="0 0 100 220" xmlns="http://www.w3.org/2000/svg">${buildingInnerMarkup(dimension, level, satisfaction)}</svg>`;
 }
 
 // 把六座建築嵌進一個固定版面的城市場景（含克萊德河背景），純靜態展示用
@@ -114,17 +142,21 @@ const CITY_LAYOUT = {
   reflection:  { cx: 360, cy: 380 },
 };
 
-function citySceneSVG(levels) {
+function citySceneSVG(data) {
   const W = 110;
   const H = W * 2.2;
   const buildingsMarkup = Object.keys(CITY_LAYOUT).map((dim) => {
     const { cx, cy } = CITY_LAYOUT[dim];
-    const level = (levels && levels[dim] && levels[dim].level) || 1;
+    const level = (data && data[dim] && data[dim].level) || 1;
+    const satisfaction = data && data[dim] ? data[dim].avgSatisfaction : 3;
     const x = cx - W / 2;
     const y = cy - H;
     return `
-      <svg x="${x}" y="${y}" width="${W}" height="${H}" viewBox="0 0 100 220">${buildingInnerMarkup(dim, level)}</svg>
-      <text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" fill="var(--ink-soft)">${DIM_CONFIG[dim].label}・${level}樓</text>
+      <g class="city-building" data-dim="${dim}" style="cursor:pointer;">
+        <rect x="${x - 6}" y="${y - 6}" width="${W + 12}" height="${H + 40}" fill="transparent"/>
+        <svg x="${x}" y="${y}" width="${W}" height="${H}" viewBox="0 0 100 220">${buildingInnerMarkup(dim, level, satisfaction)}</svg>
+        <text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" fill="var(--ink-soft)">${DIM_CONFIG[dim].label}・${level}樓</text>
+      </g>
     `;
   }).join('');
 

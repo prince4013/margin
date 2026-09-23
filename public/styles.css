@@ -123,6 +123,10 @@ body {
 /* ===== City（靜態場景） ===== */
 .city-scene-panel { padding: 12px; }
 .city-scene-panel svg { width: 100%; height: auto; display: block; }
+.building-detail-head { display: flex; justify-content: space-between; align-items: center; }
+.building-detail-icon { width: 120px; margin: 12px auto; }
+.building-detail-icon svg { width: 100%; height: auto; display: block; }
+.building-detail-level { text-align: center; font-size: 14px; color: var(--ink-soft); margin: 0 0 14px; }
 
 /* ===== Modal ===== */
 .modal-overlay {
