@@ -1,22 +1,16 @@
--- 餘裕管理 App 資料庫結構（v2）
--- type: acute(急性情緒/淡化型) / chronic(慢性壓力/進度型) / todo(待辦清單/單次型) / effort(完成清單加成型)
+-- 留學生活儀表板 資料庫結構（v3 — 全新概念，取代舊版餘裕管理）
 
-CREATE TABLE IF NOT EXISTS events (
+-- 六個向度：learning / social / energy / economy / exploration / reflection
+CREATE TABLE IF NOT EXISTS entries (
   id SERIAL PRIMARY KEY,
-  type VARCHAR(20) NOT NULL,
-  title TEXT NOT NULL,
-  category VARCHAR(50) DEFAULT '未分類',
-  initial_burden NUMERIC DEFAULT 10,
-  decay_speed VARCHAR(10) DEFAULT 'medium', -- acute: fast/medium/long
-  progress NUMERIC DEFAULT 0, -- chronic: 0-10（10點量表）
-  event_date DATE DEFAULT CURRENT_DATE,
-  status VARCHAR(20) DEFAULT 'active',
-  created_at TIMESTAMP DEFAULT now(),
-  resolved_at TIMESTAMP
+  dimension VARCHAR(20) NOT NULL,
+  event_date DATE NOT NULL,
+  description TEXT NOT NULL,
+  intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5
+  created_at TIMESTAMP DEFAULT now()
+  -- 「事前已知的計畫」還是「行程外的行動」由 event_date 跟 created_at 的日期差自動判斷，
+  -- 不另外存欄位：created_at 的日期 < event_date → 計畫（藍）；>= event_date → 行程外（橘）
 );
-
--- 舊版可能沒有這個欄位，補上去且不影響既有資料
-ALTER TABLE events ADD COLUMN IF NOT EXISTS event_date DATE DEFAULT CURRENT_DATE;
 
 CREATE TABLE IF NOT EXISTS quick_notes (
   id SERIAL PRIMARY KEY,
@@ -26,31 +20,10 @@ CREATE TABLE IF NOT EXISTS quick_notes (
   triaged_at TIMESTAMP
 );
 
--- category: skill(專業技能力) / stamina(體力) / mental(精神穩定度)
---           knowledge(知識力) / life(生活穩定度) / economic(經濟力)
-CREATE TABLE IF NOT EXISTS growth_stats (
-  id SERIAL PRIMARY KEY,
-  category VARCHAR(20) NOT NULL,
-  amount NUMERIC NOT NULL,
-  note TEXT,
-  created_at TIMESTAMP DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS daily_margin (
-  date DATE PRIMARY KEY,
-  margin NUMERIC,
-  breakdown JSONB
-);
-
-CREATE TABLE IF NOT EXISTS weekly_plans (
-  week_start DATE PRIMARY KEY,
-  items JSONB,
-  predicted_curve JSONB
-);
-
--- category: growth(成長類) / explore(探索類) / relax(放鬆類)
-CREATE TABLE IF NOT EXISTS suggestions (
-  id SERIAL PRIMARY KEY,
-  category VARCHAR(20) NOT NULL,
-  title TEXT NOT NULL
+-- 六個向度各自在地圖上釘的一個真實地點（只需設定一次）
+CREATE TABLE IF NOT EXISTS building_locations (
+  dimension VARCHAR(20) PRIMARY KEY,
+  lat NUMERIC NOT NULL,
+  lng NUMERIC NOT NULL,
+  place_name TEXT
 );

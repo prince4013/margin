@@ -1,8 +1,8 @@
 {
-  "name": "margin-app",
-  "version": "1.0.0",
+  "name": "study-abroad-dashboard",
+  "version": "3.0.0",
   "private": true,
-  "description": "餘裕管理 App - 個人生活設計管理工具",
+  "description": "留學生活儀表板 - 六向度儀表板、格拉斯哥地圖城市視覺化",
   "engines": {
     "node": ">=18"
   },

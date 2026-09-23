@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>餘裕 — 生活設計管理</title>
+<title>留學生活儀表板</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22%230ABAB5%22/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -17,7 +18,7 @@
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-name">餘裕</span>
+      <span class="brand-name">留學生活</span>
     </div>
     <div class="theme-switch" role="group" aria-label="切換主題色">
       <button class="theme-dot" data-theme-btn="tiffany" style="--dot:#0ABAB5" aria-label="蒂芬妮綠"></button>
@@ -30,163 +31,79 @@
 
     <!-- ===== 儀表板 ===== -->
     <section class="view" id="view-dashboard">
-      <div class="hero-margin">
-        <div class="breathing-ring" id="breathingRing">
-          <div class="breathing-core">
-            <div class="margin-number-wrap">
-              <span class="margin-number" id="marginNumber">--</span><span class="margin-unit">%</span>
-            </div>
+      <div class="panel">
+        <div class="period-controls">
+          <div class="period-type-switch">
+            <button class="seg-btn active" data-period-type="week">週</button>
+            <button class="seg-btn" data-period-type="month">月</button>
+          </div>
+          <div class="period-nav">
+            <button class="icon-btn" id="btnPrevPeriod">‹</button>
+            <span id="periodLabel" class="period-label">本週</span>
+            <button class="icon-btn" id="btnNextPeriod">›</button>
           </div>
         </div>
-        <p class="hero-date" id="heroDate"></p>
-        <p class="hero-caption" id="marginCaption">正在讀取你的餘裕狀態…</p>
-      </div>
 
-      <div id="suggestionCard" class="suggestion-card hidden">
-        <p class="suggestion-label">你現在有餘裕，想用在哪裡？</p>
-        <p class="suggestion-title" id="suggestionTitle"></p>
-        <div class="suggestion-actions">
-          <button class="btn-ghost" id="btnAnotherSuggestion">換一個</button>
-          <button class="btn-primary" id="btnDismissSuggestion">先收起</button>
+        <canvas id="hexChart" height="280"></canvas>
+
+        <div class="legend-row">
+          <span><span class="legend-dot legend-blue"></span>既定行程投入</span>
+          <span><span class="legend-dot legend-orange"></span>行程外的行動</span>
         </div>
       </div>
 
-      <div class="panel">
-        <h2 class="panel-title">今天的行程</h2>
-        <ul class="note-list" id="todayScheduleList"><li>目前沒有本週規劃裡標記在今天的事項。</li></ul>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">近期餘裕趨勢</h2>
-        <canvas id="trendChart" height="140"></canvas>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">目前負擔來源</h2>
-        <ul class="breakdown-list" id="breakdownList"></ul>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">長期投資成長軸</h2>
-        <div class="growth-stat-row" id="growthStatRow">
-          <div class="growth-stat"><span class="growth-label">專業技能力</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-          <div class="growth-stat"><span class="growth-label">經濟力</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-          <div class="growth-stat"><span class="growth-label">知識力</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-          <div class="growth-stat"><span class="growth-label">體力</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-          <div class="growth-stat"><span class="growth-label">精神穩定度</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-          <div class="growth-stat"><span class="growth-label">生活穩定度</span><div class="growth-bar"><div class="growth-bar-fill" style="width:0%"></div></div><span class="growth-value">0</span></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">測試用途</h2>
-        <p class="panel-hint">清空所有事件、完成清單、隨手記、餘裕紀錄與本週規劃，方便重新開始測試。這個動作無法復原。</p>
-        <button class="btn-ghost full" id="btnResetTestData">清空所有測試資料</button>
+      <div id="imbalanceCard" class="imbalance-card hidden">
+        <p id="imbalanceText"></p>
       </div>
     </section>
 
-    <!-- ===== 事件（負擔） ===== -->
-    <section class="view hidden" id="view-events">
+    <!-- ===== 手動輸入 ===== -->
+    <section class="view hidden" id="view-input">
       <div class="panel">
-        <h2 class="panel-title">新增負擔事件</h2>
-        <form id="eventForm" class="form-grid">
+        <h2 class="panel-title">記一筆</h2>
+        <form id="entryForm" class="form-grid">
           <label class="field">
-            <span>事件名稱</span>
-            <input type="text" id="ev-title" required placeholder="例如：跟主管的溝通問題">
-          </label>
-
-          <label class="field">
-            <span>大類</span>
-            <select id="ev-type">
-              <option value="acute">急性情緒（淡化型）</option>
-              <option value="chronic">慢性壓力（進度型）</option>
-              <option value="todo">待辦清單（單次型）</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>分類標籤</span>
-            <select id="ev-category">
-              <option value="人際">人際</option>
-              <option value="感情">感情</option>
-              <option value="功課">功課</option>
-              <option value="工作">工作</option>
-              <option value="生活">生活</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>日期</span>
-            <input type="date" id="ev-date">
-          </label>
-
-          <label class="field">
-            <span>初始負擔強度：<span id="ev-burden-value">20</span></span>
-            <input type="range" id="ev-burden" min="1" max="100" value="20">
-          </label>
-
-          <label class="field" id="field-decay">
-            <span>淡化速度</span>
-            <select id="ev-decay">
-              <option value="fast">快（隔天就好）</option>
-              <option value="medium" selected>中（約 1–3 天）</option>
-              <option value="long">長（約 3–7 天）</option>
-            </select>
-          </label>
-
-          <button type="submit" class="btn-primary full">新增</button>
-        </form>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">進行中的事件</h2>
-        <div id="eventList" class="event-list"></div>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">本週已離開的心理負擔</h2>
-        <div id="departedList" class="event-list muted"></div>
-      </div>
-    </section>
-
-    <!-- ===== 完成清單 ===== -->
-    <section class="view hidden" id="view-completions">
-      <div class="panel">
-        <h2 class="panel-title">記一筆完成的事</h2>
-        <form id="completionForm" class="form-grid">
-          <label class="field">
-            <span>完成了什麼</span>
-            <input type="text" id="co-title" required placeholder="例如：洗了衣服、看完一本書">
-          </label>
-          <label class="field">
-            <span>分類</span>
-            <select id="co-category">
-              <option value="功課">功課</option>
-              <option value="工作">工作</option>
-              <option value="身體健康">身體健康</option>
-              <option value="心理照顧">心理照顧</option>
-              <option value="自我成長">自我成長</option>
-              <option value="家事財務">家事財務</option>
-            </select>
+            <span>向度</span>
+            <div class="dimension-picker" id="dimensionPicker"></div>
           </label>
           <label class="field">
             <span>日期</span>
-            <input type="date" id="co-date">
+            <input type="date" id="en-date">
           </label>
           <label class="field">
-            <span>做完後感覺多輕盈</span>
-            <select id="co-lightness">
-              <option value="small">有一點輕鬆</option>
-              <option value="medium" selected>滿輕鬆的</option>
-              <option value="large">非常輕鬆</option>
-            </select>
+            <span>內容描述</span>
+            <input type="text" id="en-desc" required placeholder="做了什麼？">
+          </label>
+          <label class="field">
+            <span>投入程度：<span id="en-intensity-value">3</span></span>
+            <div class="dot-scale-5" id="intensityDots"></div>
           </label>
           <button type="submit" class="btn-primary full">儲存</button>
         </form>
       </div>
       <div class="panel">
-        <h2 class="panel-title">最近完成</h2>
-        <ul class="note-list" id="completionList"></ul>
+        <h2 class="panel-title">最近的紀錄</h2>
+        <ul class="note-list" id="recentEntriesList"></ul>
+      </div>
+    </section>
+
+    <!-- ===== 城市 ===== -->
+    <section class="view hidden" id="view-city">
+      <div class="panel" id="citySetupPanel">
+        <h2 class="panel-title">設定六個向度的地點</h2>
+        <p class="panel-hint" id="citySetupHint">在地圖上點一下，把「<span id="setupDimensionLabel"></span>」釘在對你有意義的地方。</p>
+      </div>
+      <div class="panel city-map-panel">
+        <div id="cityMap"></div>
+      </div>
+      <div id="buildingDetailPanel" class="panel hidden">
+        <div class="building-detail-head">
+          <h2 class="panel-title" id="buildingDetailTitle"></h2>
+          <button class="btn-ghost small" id="btnCloseBuildingDetail">關閉</button>
+        </div>
+        <div id="buildingDetailIcon" class="building-detail-icon"></div>
+        <p id="buildingDetailLevel" class="building-detail-level"></p>
+        <ul class="note-list" id="buildingDetailList"></ul>
       </div>
     </section>
 
@@ -194,7 +111,7 @@
     <section class="view hidden" id="view-notes">
       <div class="panel">
         <h2 class="panel-title">隨手記一筆</h2>
-        <p class="panel-hint">腦中的雜念先寫下來，光是捕捉就能釋放大半心理負擔，剩下的留到週日回顧整理。</p>
+        <p class="panel-hint">未開始的計畫、想法先寫下來，之後可以一鍵轉成正式紀錄。</p>
         <form id="noteForm" class="inline-form">
           <input type="text" id="note-content" placeholder="現在腦中在想什麼？" required>
           <button type="submit" class="btn-primary">記下</button>
@@ -210,40 +127,49 @@
       </div>
     </section>
 
-    <!-- ===== 本週規劃 ===== -->
-    <section class="view hidden" id="view-weekly">
-      <div class="panel">
-        <h2 class="panel-title">下週可預期的行程</h2>
-        <p class="panel-hint">只記已經知道會發生的事，點選日期即可，不用猜測強度太細。</p>
-        <div id="weeklyItemRows"></div>
-        <button type="button" class="btn-ghost small" id="btnAddWeeklyItem">+ 新增一項</button>
-        <button type="button" class="btn-primary full" id="btnSaveWeeklyPlan" style="margin-top:12px">儲存本週規劃</button>
-      </div>
-      <div class="panel">
-        <h2 class="panel-title">本週負擔分布（週一–週日）</h2>
-        <p class="panel-hint">長條越高，代表那天預期的心理負擔越重。</p>
-        <canvas id="weeklyChart" height="160"></canvas>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel-title">本週已規劃事項</h2>
-        <ul class="note-list" id="weeklyItemsList"></ul>
-      </div>
-    </section>
+    <div class="panel">
+      <h2 class="panel-title">測試用途</h2>
+      <p class="panel-hint">清空所有紀錄、隨手記與地點設定，重新開始測試。這個動作無法復原。</p>
+      <button class="btn-ghost full" id="btnResetTestData">清空所有測試資料</button>
+    </div>
 
   </main>
 
   <nav class="tabbar">
     <button class="tab-btn active" data-view="dashboard"><span>儀表板</span></button>
-    <button class="tab-btn" data-view="events"><span>事件</span></button>
-    <button class="tab-btn" data-view="completions"><span>完成清單</span></button>
+    <button class="tab-btn" data-view="input"><span>手動輸入</span></button>
+    <button class="tab-btn" data-view="city"><span>城市</span></button>
     <button class="tab-btn" data-view="notes"><span>隨手記</span></button>
-    <button class="tab-btn" data-view="weekly"><span>本週規劃</span></button>
   </nav>
 
 </div>
 
+<!-- 轉為正式紀錄的小表單（隨手記用） -->
+<div id="promoteModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>轉為正式紀錄</h3>
+    <label class="field">
+      <span>向度</span>
+      <div class="dimension-picker" id="promoteDimensionPicker"></div>
+    </label>
+    <label class="field">
+      <span>日期</span>
+      <input type="date" id="promote-date">
+    </label>
+    <label class="field">
+      <span>投入程度：<span id="promote-intensity-value">3</span></span>
+      <div class="dot-scale-5" id="promoteIntensityDots"></div>
+    </label>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnCancelPromote">取消</button>
+      <button class="btn-primary" id="btnConfirmPromote">確認轉換</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/buildings.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
