@@ -36,6 +36,7 @@ function initTabs() {
       document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
       document.getElementById(`view-${view}`).classList.remove('hidden');
       if (view === 'input') loadRecentEntries();
+      if (view === 'satisfaction') loadSatisfactionPage();
       if (view === 'city') loadCity();
       if (view === 'notes') loadNotes();
       if (view === 'dashboard') loadDashboard();
@@ -102,10 +103,10 @@ async function loadDashboard() {
     document.getElementById('periodLabel').textContent = label;
 
     const labels = DIMENSIONS.map((d) => DIM_CONFIG[d].label);
-    const totals = DIMENSIONS.map((d) => data.breakdown[d]?.total || 0);
-    const blues = DIMENSIONS.map((d) => data.breakdown[d]?.blue || 0);
+    const investments = DIMENSIONS.map((d) => data.breakdown[d]?.investment || 0);
+    const satisfactionSums = DIMENSIONS.map((d) => data.breakdown[d]?.satisfactionSum || 0);
 
-    renderHexChart(labels, totals, blues);
+    renderHexChart(labels, investments, satisfactionSums);
 
     const card = document.getElementById('imbalanceCard');
     if (data.imbalance) {
@@ -129,18 +130,18 @@ async function loadDashboard() {
   }
 }
 
-function renderHexChart(labels, totals, blues) {
+function renderHexChart(labels, investments, satisfactionSums) {
   const ctx = document.getElementById('hexChart');
   if (typeof Chart === 'undefined') return;
   if (hexChart) hexChart.destroy();
-  const maxVal = Math.max(10, ...totals, ...blues);
+  const maxVal = Math.max(10, ...investments, ...satisfactionSums);
   hexChart = new Chart(ctx, {
     type: 'radar',
     data: {
       labels,
       datasets: [
-        { label: '總投入', data: totals, backgroundColor: 'rgba(216,90,48,0.25)', borderColor: '#D85A30', borderWidth: 1, pointRadius: 0 },
-        { label: '既定計畫', data: blues, backgroundColor: 'rgba(55,138,221,0.35)', borderColor: '#378ADD', borderWidth: 1, pointRadius: 0 },
+        { label: '投入量', data: investments, backgroundColor: 'rgba(55,138,221,0.35)', borderColor: '#378ADD', borderWidth: 1, pointRadius: 0 },
+        { label: '滿意度', data: satisfactionSums, backgroundColor: 'rgba(216,90,48,0.3)', borderColor: 'rgba(216,90,48,0.6)', borderWidth: 1, pointRadius: 0 },
       ],
     },
     options: {
@@ -150,24 +151,13 @@ function renderHexChart(labels, totals, blues) {
   });
 }
 
-// ---------- 輸入（今日行動 / 計畫行程）----------
-let entryKind = 'action';
-
+// ---------- 輸入 ----------
 function initEntryForm() {
   const picker = document.getElementById('dimensionPicker');
   buildDimensionPicker(picker, DIMENSIONS[0]);
   const dots = document.getElementById('intensityDots');
   buildIntensityDots(dots, document.getElementById('en-intensity-value'), 3);
-  const satDots = document.getElementById('satisfactionDots');
-  buildIntensityDots(satDots, document.getElementById('en-satisfaction-value'), 3);
   document.getElementById('en-date').value = todayStr();
-
-  document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      entryKind = btn.dataset.kind;
-      document.querySelectorAll('#view-input .input-kind-switch [data-kind]').forEach((b) => b.classList.toggle('active', b === btn));
-    });
-  });
 
   document.getElementById('entryForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -176,8 +166,6 @@ function initEntryForm() {
       event_date: document.getElementById('en-date').value || todayStr(),
       description: document.getElementById('en-desc').value,
       intensity: Number(dots.dataset.value) || 3,
-      satisfaction: Number(satDots.dataset.value) || 3,
-      kind: entryKind,
     };
     try {
       await api('/entries', { method: 'POST', body: JSON.stringify(payload) });
@@ -191,14 +179,12 @@ function initEntryForm() {
   });
 }
 
-
-
 async function loadRecentEntries() {
   const rows = await api('/entries');
   const list = document.getElementById('recentEntriesList');
   list.innerHTML = rows.slice(0, 30).map((r) => `
     <li>
-      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · ${r.event_date.slice(0, 10)} · 投入 ${r.intensity} · 滿意 ${r.satisfaction} · ${r.kind === 'plan' ? '計畫' : '今日行動'}</div></span>
+      <span>${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · ${r.event_date.slice(0, 10)} · 投入 ${r.intensity} · ${r.satisfaction === null ? '尚未評滿意度' : '滿意 ' + r.satisfaction}</div></span>
       <button data-delete-entry="${r.id}">刪除</button>
     </li>
   `).join('') || '<li>還沒有紀錄。</li>';
@@ -208,6 +194,57 @@ async function loadRecentEntries() {
       await api(`/entries/${btn.dataset.deleteEntry}`, { method: 'DELETE' });
       await loadRecentEntries();
       await loadDashboard();
+    });
+  });
+}
+
+// ---------- 滿意度（事後評分）----------
+async function loadSatisfactionPage() {
+  const rows = await api('/entries?unrated=true'); // event_date <= 今天的所有紀錄
+  const container = document.getElementById('satisfactionByDate');
+
+  if (rows.length === 0) {
+    container.innerHTML = '<p class="panel-hint">目前沒有可以評分的紀錄。</p>';
+    return;
+  }
+
+  const byDate = {};
+  rows.forEach((r) => {
+    const d = r.event_date.slice(0, 10);
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(r);
+  });
+  const dates = Object.keys(byDate).sort().reverse();
+
+  container.innerHTML = dates.map((d) => `
+    <div class="satisfaction-date-group">
+      <h3 class="satisfaction-date-label">${d}</h3>
+      ${byDate[d].map((r) => `
+        <div class="satisfaction-row" data-entry-id="${r.id}">
+          <div class="satisfaction-row-desc">${escapeHtml(r.description)}<div class="item-meta">${DIM_CONFIG[r.dimension].labelEn} · 投入 ${r.intensity}</div></div>
+          <div class="dot-scale-5 satisfaction-row-dots" data-value="${r.satisfaction || 0}">
+            ${Array.from({ length: 5 }).map((_, i) => `<button type="button" class="dot-5 ${i < (r.satisfaction || 0) ? 'filled' : ''}" data-v="${i + 1}"></button>`).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.satisfaction-row').forEach((row) => {
+    const entryId = row.dataset.entryId;
+    const dotsEl = row.querySelector('.satisfaction-row-dots');
+    dotsEl.querySelectorAll('.dot-5').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const v = Number(btn.dataset.v);
+        try {
+          await api(`/entries/${entryId}/satisfaction`, { method: 'PATCH', body: JSON.stringify({ satisfaction: v }) });
+          dotsEl.dataset.value = v;
+          dotsEl.querySelectorAll('.dot-5').forEach((d, idx) => d.classList.toggle('filled', idx < v));
+          await loadDashboard();
+        } catch (err) {
+          alert('評分失敗：' + err.message);
+        }
+      });
     });
   });
 }
@@ -240,7 +277,7 @@ async function openBuildingDetail(dim) {
   const entries = await api(`/entries?dimension=${dim}`);
   const list = document.getElementById('buildingDetailList');
   list.innerHTML = entries.map((e) => `
-    <li><span>${escapeHtml(e.description)}<div class="item-meta">${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · 滿意 ${e.satisfaction} · ${e.kind === 'plan' ? '計畫' : '今日行動'}</div></span></li>
+    <li><span>${escapeHtml(e.description)}<div class="item-meta">${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · ${e.satisfaction === null ? '尚未評滿意度' : '滿意 ' + e.satisfaction}</div></span></li>
   `).join('') || '<li>這個向度還沒有紀錄。</li>';
 
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -296,18 +333,9 @@ async function loadNotes() {
 }
 
 let promoteNoteId = null;
-let promoteKind = 'action';
-document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    promoteKind = btn.dataset.kind;
-    document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((b) => b.classList.toggle('active', b === btn));
-  });
-});
 
 function openPromoteModal(noteId) {
   promoteNoteId = noteId;
-  promoteKind = 'action';
-  document.querySelectorAll('#promoteKindSwitch [data-kind]').forEach((b) => b.classList.toggle('active', b.dataset.kind === 'action'));
   document.getElementById('promote-date').value = todayStr();
   document.getElementById('promoteModal').classList.remove('hidden');
 }
@@ -317,7 +345,6 @@ document.getElementById('btnCancelPromote').addEventListener('click', () => {
 document.getElementById('btnConfirmPromote').addEventListener('click', async () => {
   const picker = document.getElementById('promoteDimensionPicker');
   const dots = document.getElementById('promoteIntensityDots');
-  const satDots = document.getElementById('promoteSatisfactionDots');
   try {
     await api(`/notes/${promoteNoteId}/promote`, {
       method: 'POST',
@@ -325,8 +352,6 @@ document.getElementById('btnConfirmPromote').addEventListener('click', async () 
         dimension: picker.dataset.selected,
         event_date: document.getElementById('promote-date').value || todayStr(),
         intensity: Number(dots.dataset.value) || 3,
-        satisfaction: Number(satDots.dataset.value) || 3,
-        kind: promoteKind,
       }),
     });
     document.getElementById('promoteModal').classList.add('hidden');
@@ -359,5 +384,4 @@ initEntryForm();
 initNotesForm();
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), DIMENSIONS[0]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);
-buildIntensityDots(document.getElementById('promoteSatisfactionDots'), document.getElementById('promote-satisfaction-value'), 3);
 loadDashboard();

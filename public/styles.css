@@ -116,9 +116,12 @@ body {
 .note-list li .item-meta { font-size: 11px; color: var(--ink-faint); }
 .note-list li .item-actions { display: flex; gap: 6px; }
 
-/* ===== Input kind switch (今日行動 / 計畫行程) ===== */
-.input-kind-switch { display: flex; background: var(--paper); border-radius: 999px; padding: 3px; margin-bottom: 16px; }
-.input-kind-switch .seg-btn { flex: 1; }
+/* ===== Satisfaction page ===== */
+.satisfaction-date-group { margin-bottom: 18px; }
+.satisfaction-date-label { font-size: 13px; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.satisfaction-row { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px; }
+.satisfaction-row-desc { font-size: 14px; }
+.satisfaction-row-dots { gap: 6px; }
 
 /* ===== City（靜態場景） ===== */
 .city-scene-panel { padding: 12px; }
