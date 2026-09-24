@@ -195,7 +195,16 @@ async function loadTodaySchedule() {
   const totalIntensity = rows.reduce((sum, r) => sum + (Number(r.intensity) || 0), 0);
   const pct = Math.round(Math.max(0, Math.min(100, (1 - totalIntensity / 8) * 100)));
   document.getElementById('marginRing').style.setProperty('--pct', pct);
+  document.getElementById('marginRing').style.setProperty('--ring-color', marginRingColor(pct));
   document.getElementById('marginRingValue').textContent = pct;
+}
+
+// 🎛️ 餘裕值分四段顏色，想調整門檻或顏色改這裡就好
+function marginRingColor(pct) {
+  if (pct < 20) return '#C1483A'; // 紅
+  if (pct < 40) return '#E08B3B'; // 橘
+  if (pct < 60) return '#3FA66B'; // 綠
+  return '#378ADD'; // 藍
 }
 
 // ---------- 想做的事 ----------
