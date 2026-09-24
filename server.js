@@ -273,7 +273,7 @@ app.post('/api/notes/:id/promote', async (req, res) => {
   }
 });
 
-// ================= 想做的事（每日隨機挑一件）=================
+// ================= 想做的事（從隨手記「待處理」裡每天隨機挑一件）=================
 function dailyPickIndex(dateStr, length) {
   let hash = 0;
   for (let i = 0; i < dateStr.length; i++) {
@@ -282,50 +282,17 @@ function dailyPickIndex(dateStr, length) {
   return hash % length;
 }
 
-app.get('/api/wishlist', async (req, res) => {
+app.get('/api/notes/today-pick', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM wishlist_items ORDER BY created_at DESC');
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '讀取想做的事失敗：' + err.message });
-  }
-});
-
-app.get('/api/wishlist/today', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM wishlist_items ORDER BY id ASC');
+    const { rows } = await pool.query(
+      'SELECT * FROM quick_notes WHERE triaged = FALSE ORDER BY id ASC'
+    );
     if (rows.length === 0) return res.json(null);
     const todayStr = new Date().toISOString().slice(0, 10);
     res.json(rows[dailyPickIndex(todayStr, rows.length)]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: '讀取今天想做的事失敗：' + err.message });
-  }
-});
-
-app.post('/api/wishlist', async (req, res) => {
-  const { content } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: '內容不可為空' });
-  try {
-    const { rows } = await pool.query(
-      'INSERT INTO wishlist_items (content) VALUES ($1) RETURNING *',
-      [content.trim()]
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '新增失敗：' + err.message });
-  }
-});
-
-app.delete('/api/wishlist/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM wishlist_items WHERE id = $1', [req.params.id]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: '刪除失敗：' + err.message });
   }
 });
 

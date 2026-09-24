@@ -77,12 +77,7 @@
       <div class="panel">
         <h2 class="panel-title">想做的事</h2>
         <p class="wishlist-today" id="wishlistToday">還沒有加入任何想做的事。</p>
-        <form id="wishlistForm" class="inline-form">
-          <input type="text" id="wishlist-content" placeholder="想加進清單的一件事" required>
-          <button type="submit" class="btn-primary">加入</button>
-        </form>
-        <button type="button" class="btn-ghost small" id="btnToggleWishlistManage" style="margin-top:10px;">管理清單</button>
-        <ul class="note-list hidden" id="wishlistManageList" style="margin-top:10px;"></ul>
+        <p class="panel-hint" style="margin:0;">從「隨手記」的「待處理」清單裡每天隨機挑一件；想新增或整理，到隨手記頁去操作。</p>
       </div>
 
       <div class="panel">
@@ -170,7 +165,7 @@
         </form>
       </div>
       <div class="panel">
-        <h2 class="panel-title">待整理（<span id="untriagedCount">0</span>）</h2>
+        <h2 class="panel-title">待處理（<span id="untriagedCount">0</span>）</h2>
         <ul class="note-list" id="untriagedList"></ul>
       </div>
       <div class="panel">

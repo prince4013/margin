@@ -207,49 +207,12 @@ function marginRingColor(pct) {
   return '#378ADD'; // 藍
 }
 
-// ---------- 想做的事 ----------
-function initWishlistForm() {
-  document.getElementById('wishlistForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const input = document.getElementById('wishlist-content');
-    try {
-      await api('/wishlist', { method: 'POST', body: JSON.stringify({ content: input.value }) });
-      input.value = '';
-      await loadWishlist();
-      await loadWishlistManageList();
-    } catch (err) {
-      alert('新增失敗：' + err.message);
-    }
-  });
-
-  document.getElementById('btnToggleWishlistManage').addEventListener('click', async () => {
-    const list = document.getElementById('wishlistManageList');
-    const willShow = list.classList.contains('hidden');
-    list.classList.toggle('hidden');
-    document.getElementById('btnToggleWishlistManage').textContent = willShow ? '收起清單' : '管理清單';
-    if (willShow) await loadWishlistManageList();
-  });
-}
-
+// ---------- 想做的事（從隨手記「待處理」隨機挑一件）----------
 async function loadWishlist() {
-  const item = await api('/wishlist/today');
-  document.getElementById('wishlistToday').textContent = item ? item.content : '還沒有加入任何想做的事，先在下面加一件吧。';
-}
-
-async function loadWishlistManageList() {
-  const rows = await api('/wishlist');
-  const list = document.getElementById('wishlistManageList');
-  list.innerHTML = rows.map((r) => `
-    <li><span>${escapeHtml(r.content)}</span><button data-delete-wish="${r.id}">刪除</button></li>
-  `).join('') || '<li>清單目前是空的。</li>';
-
-  list.querySelectorAll('[data-delete-wish]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      await api(`/wishlist/${btn.dataset.deleteWish}`, { method: 'DELETE' });
-      await loadWishlistManageList();
-      await loadWishlist();
-    });
-  });
+  const item = await api('/notes/today-pick');
+  document.getElementById('wishlistToday').textContent = item
+    ? item.content
+    : '隨手記的待處理清單是空的，先去記一筆想做的事吧。';
 }
 
 // 趨勢折線圖專用的亮色系（跟城市建築的柔和色分開，讓六條線在圖上更好區分）
@@ -567,7 +530,7 @@ async function loadNotes() {
         <button data-triage="${n.id}">已整理</button>
       </span>
     </li>
-  `).join('') || '<li>目前沒有待整理的想法。</li>';
+  `).join('') || '<li>目前沒有待處理的想法。</li>';
 
   document.getElementById('triagedList').innerHTML = triaged.slice(0, 20).map((n) => `
     <li>
@@ -622,7 +585,6 @@ initTheme();
 initTabs();
 initPeriodControls();
 initEntryForm();
-initWishlistForm();
 initNotesForm();
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), [DIMENSIONS[0]]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);
