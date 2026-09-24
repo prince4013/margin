@@ -20,12 +20,11 @@ function hexToRgb(hex) {
 function rgbToHex([r, g, b]) {
   return '#' + [r, g, b].map((x) => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
 }
-// satisfaction 現在是「滿意度比例」(投入是否值得)：1 = 剛好符合預期，<1 = 不如預期，>1 = 超出預期
-// t=0.25 時偏灰(比例趨近 0，投入完全沒有回報)；比例達到 1(含以上)時全彩飽和
-function satisfactionMix(hex, satisfactionRatio) {
-  const ratio = satisfactionRatio === undefined || satisfactionRatio === null ? 1 : satisfactionRatio;
-  const clamped = Math.max(0, Math.min(1, ratio));
-  const t = 0.25 + 0.75 * clamped;
+// satisfaction: 1-5，t=0 時偏灰、t=1 時全彩，最低也保留 25% 彩度避免整棟變死灰
+function satisfactionMix(hex, satisfaction) {
+  const s = satisfaction === undefined || satisfaction === null ? 3 : satisfaction;
+  const raw = (s - 1) / 4; // 1→0, 5→1
+  const t = 0.25 + 0.75 * Math.max(0, Math.min(1, raw));
   const [r, g, b] = hexToRgb(hex);
   const gray = (r + g + b) / 3;
   return rgbToHex([gray + (r - gray) * t, gray + (g - gray) * t, gray + (b - gray) * t]);

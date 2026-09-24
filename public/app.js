@@ -132,12 +132,7 @@ async function loadDashboard() {
 
     const labels = DIMENSIONS.map((d) => DIM_CONFIG[d].label);
     const investments = DIMENSIONS.map((d) => data.breakdown[d]?.investment || 0);
-    // 滿意度在雷達圖上的呈現值 = 平均滿意度比例 × 投入量：
-    // 比例=1(投入跟滿意度打平) 時，橘色會精準疊在藍色上；比例>1 超出預期時橘色會蓋過藍色
-    const satisfactionValues = DIMENSIONS.map((d) => {
-      const b = data.breakdown[d];
-      return b && b.avgRatio !== null ? Math.round(b.avgRatio * b.investment * 10) / 10 : 0;
-    });
+    const satisfactionValues = DIMENSIONS.map((d) => data.breakdown[d]?.satisfactionSum || 0);
 
     renderHexChart(labels, investments, satisfactionValues);
 
@@ -172,9 +167,9 @@ function renderHexChart(labels, investments, satisfactionValues) {
     type: 'radar',
     data: {
       labels,
-      // 陣列順序 = 畫的順序：投入(藍)先畫當底(order 較小)，滿意度(橘)後畫疊在上層(order 較大)
+      // 陣列順序 = 畫的順序：投入(藍)先畫當底(order 較小，不透明)，滿意度(橘)後畫疊在上層(order 較大，30% 透明)
       datasets: [
-        { label: '投入量', data: investments, backgroundColor: 'rgba(55,138,221,0.35)', borderColor: '#378ADD', borderWidth: 1, pointRadius: 0, order: 1 },
+        { label: '投入量', data: investments, backgroundColor: '#378ADD', borderColor: '#2E6FA8', borderWidth: 1, pointRadius: 0, order: 1 },
         { label: '滿意度', data: satisfactionValues, backgroundColor: 'rgba(216,90,48,0.3)', borderColor: 'rgba(216,90,48,0.7)', borderWidth: 1, pointRadius: 0, order: 2 },
       ],
     },
@@ -366,24 +361,49 @@ async function loadCity() {
 async function openBuildingDetail(dim) {
   const panel = document.getElementById('buildingDetailPanel');
   const level = lastCumulative && lastCumulative[dim] ? lastCumulative[dim].level : 1;
-  const ratio = lastCumulative && lastCumulative[dim] ? lastCumulative[dim].avgSatisfaction : 1;
+  const satisfaction = lastCumulative && lastCumulative[dim] ? lastCumulative[dim].avgSatisfaction : 3;
 
   panel.classList.remove('hidden');
   document.getElementById('buildingDetailTitle').textContent = DIM_CONFIG[dim].label;
-  document.getElementById('buildingDetailIcon').innerHTML = buildingSVG(dim, level, ratio);
-  document.getElementById('buildingDetailLevel').textContent = `目前等級：${level} 樓 · 平均滿意度比例 ${Math.round(ratio * 100)}%`;
+  document.getElementById('buildingDetailIcon').innerHTML = buildingSVG(dim, level, satisfaction);
+  document.getElementById('buildingDetailLevel').textContent = `目前等級：${level} 樓 · 平均滿意度 ${satisfaction}`;
+  detailMonthOffset = 0;
+  await loadBuildingDetailEntries(dim);
+}
 
-  const entries = await api(`/entries?dimension=${dim}`);
+function monthLabel(offset) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+}
+
+let detailDim = null;
+let detailMonthOffset = 0;
+
+async function loadBuildingDetailEntries(dim) {
+  detailDim = dim;
+  document.getElementById('buildingMonthLabel').textContent = monthLabel(detailMonthOffset);
+  const entries = await api(`/entries?dimension=${dim}&month_offset=${detailMonthOffset}`);
   const list = document.getElementById('buildingDetailList');
   list.innerHTML = entries.map((e) => `
     <li><span>${escapeHtml(e.description)}<div class="item-meta">${dimTags(e.dimensions)} · ${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · ${e.satisfaction === null ? '尚未評滿意度' : '滿意 ' + e.satisfaction}</div></span></li>
-  `).join('') || '<li>這個向度還沒有紀錄。</li>';
+  `).join('') || '<li>這個月這個向度還沒有紀錄。</li>';
 
+  const panel = document.getElementById('buildingDetailPanel');
   panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 document.getElementById('btnCloseBuildingDetail').addEventListener('click', () => {
   document.getElementById('buildingDetailPanel').classList.add('hidden');
+});
+document.getElementById('btnPrevBuildingMonth').addEventListener('click', () => {
+  detailMonthOffset -= 1;
+  loadBuildingDetailEntries(detailDim);
+});
+document.getElementById('btnNextBuildingMonth').addEventListener('click', () => {
+  detailMonthOffset += 1;
+  loadBuildingDetailEntries(detailDim);
 });
 
 // ---------- 隨手記 ----------

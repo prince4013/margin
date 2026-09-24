@@ -82,8 +82,8 @@ body {
 
 .legend-row { display: flex; gap: 18px; justify-content: center; margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
 .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.legend-blue { background: var(--blue-tint); border: 1px solid var(--blue); }
-.legend-orange { background: var(--orange-tint); border: 1px solid var(--orange); }
+.legend-blue { background: var(--blue); border: 1px solid var(--blue); }
+.legend-orange { background: rgba(216,90,48,0.3); border: 1px solid var(--orange); }
 
 .imbalance-card { background: var(--orange-tint); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px; font-size: 14px; color: #712B13; }
 

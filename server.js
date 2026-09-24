@@ -45,7 +45,7 @@ app.post('/api/entries', async (req, res) => {
 });
 
 app.get('/api/entries', async (req, res) => {
-  const { dimension, upcoming, unrated, week_offset } = req.query;
+  const { dimension, upcoming, unrated, week_offset, month_offset } = req.query;
   try {
     const conditions = [];
     const params = [];
@@ -57,9 +57,14 @@ app.get('/api/entries', async (req, res) => {
       params.push(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
       conditions.push(`event_date >= $${params.length - 1} AND event_date <= $${params.length}`);
     }
+    if (month_offset !== undefined) {
+      const { start, end } = calc.periodRange('month', Number(month_offset) || 0);
+      params.push(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
+      conditions.push(`event_date >= $${params.length - 1} AND event_date <= $${params.length}`);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const order = upcoming === 'true' ? 'ORDER BY event_date ASC' : 'ORDER BY event_date DESC, created_at DESC';
-    const limit = upcoming === 'true' || week_offset !== undefined ? '' : 'LIMIT 200';
+    const limit = (upcoming === 'true' || week_offset !== undefined || month_offset !== undefined) ? '' : 'LIMIT 200';
     const { rows } = await pool.query(`SELECT * FROM entries ${where} ${order} ${limit}`, params);
     res.json(rows);
   } catch (err) {
