@@ -172,6 +172,12 @@ async function loadDashboard() {
   }
 
   try {
+    await loadWishlist();
+  } catch (err) {
+    console.error('讀取想做的事失敗', err);
+  }
+
+  try {
     await loadTrendChart();
   } catch (err) {
     console.error('讀取趨勢失敗', err);
@@ -184,11 +190,72 @@ async function loadTodaySchedule() {
   list.innerHTML = rows.map((r) => `
     <li><span>${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)}${tagChips(r.tags)} · 投入 ${r.intensity}</div></span></li>
   `).join('') || '<li>今天還沒有排定的行程或計畫。</li>';
+
+  // 預期餘裕值 = 1 - (今日投入值 / 8)，以圓環呈現；每個 entry 只算一次(不因複選向度而重複計入)
+  const totalIntensity = rows.reduce((sum, r) => sum + (Number(r.intensity) || 0), 0);
+  const pct = Math.round(Math.max(0, Math.min(100, (1 - totalIntensity / 8) * 100)));
+  document.getElementById('marginRing').style.setProperty('--pct', pct);
+  document.getElementById('marginRingValue').textContent = pct;
 }
+
+// ---------- 想做的事 ----------
+function initWishlistForm() {
+  document.getElementById('wishlistForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('wishlist-content');
+    try {
+      await api('/wishlist', { method: 'POST', body: JSON.stringify({ content: input.value }) });
+      input.value = '';
+      await loadWishlist();
+      await loadWishlistManageList();
+    } catch (err) {
+      alert('新增失敗：' + err.message);
+    }
+  });
+
+  document.getElementById('btnToggleWishlistManage').addEventListener('click', async () => {
+    const list = document.getElementById('wishlistManageList');
+    const willShow = list.classList.contains('hidden');
+    list.classList.toggle('hidden');
+    document.getElementById('btnToggleWishlistManage').textContent = willShow ? '收起清單' : '管理清單';
+    if (willShow) await loadWishlistManageList();
+  });
+}
+
+async function loadWishlist() {
+  const item = await api('/wishlist/today');
+  document.getElementById('wishlistToday').textContent = item ? item.content : '還沒有加入任何想做的事，先在下面加一件吧。';
+}
+
+async function loadWishlistManageList() {
+  const rows = await api('/wishlist');
+  const list = document.getElementById('wishlistManageList');
+  list.innerHTML = rows.map((r) => `
+    <li><span>${escapeHtml(r.content)}</span><button data-delete-wish="${r.id}">刪除</button></li>
+  `).join('') || '<li>清單目前是空的。</li>';
+
+  list.querySelectorAll('[data-delete-wish]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await api(`/wishlist/${btn.dataset.deleteWish}`, { method: 'DELETE' });
+      await loadWishlistManageList();
+      await loadWishlist();
+    });
+  });
+}
+
+// 趨勢折線圖專用的亮色系（跟城市建築的柔和色分開，讓六條線在圖上更好區分）
+const TREND_COLORS = {
+  learning: '#8B5CF6', // 紫
+  social: '#EC4899', // 粉紅
+  energy: '#F5C400', // 黃
+  economy: '#14B8A6', // 綠松
+  exploration: '#F97316', // 橘
+  reflection: '#3B82F6', // 藍
+};
 
 let trendChart;
 async function loadTrendChart() {
-  const points = await api('/trend?weeks=8');
+  const points = await api('/trend');
   const ctx = document.getElementById('trendChart');
   if (typeof Chart === 'undefined') return;
   if (trendChart) trendChart.destroy();
@@ -197,8 +264,8 @@ async function loadTrendChart() {
   const datasets = DIMENSIONS.map((d) => ({
     label: DIM_CONFIG[d].label,
     data: points.map((p) => p.investments[d]),
-    borderColor: DIM_CONFIG[d].stroke,
-    backgroundColor: DIM_CONFIG[d].stroke,
+    borderColor: TREND_COLORS[d],
+    backgroundColor: TREND_COLORS[d],
     fill: false,
     tension: 0.3,
     pointRadius: 3,
@@ -541,25 +608,12 @@ document.getElementById('btnConfirmPromote').addEventListener('click', async () 
   }
 });
 
-// ---------- 清空測試資料 ----------
-document.getElementById('btnResetTestData').addEventListener('click', async () => {
-  if (!confirm('確定要清空所有紀錄、隨手記與地點設定嗎？這個動作無法復原。')) return;
-  if (!confirm('再次確認：真的要全部清空嗎？')) return;
-  try {
-    await api('/reset-test-data', { method: 'POST' });
-    document.getElementById('citySceneContainer').innerHTML = '';
-    alert('已清空所有測試資料。');
-    await loadDashboard();
-  } catch (err) {
-    alert('清空失敗：' + err.message);
-  }
-});
-
 // ---------- 初始化 ----------
 initTheme();
 initTabs();
 initPeriodControls();
 initEntryForm();
+initWishlistForm();
 initNotesForm();
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), [DIMENSIONS[0]]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);

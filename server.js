@@ -75,9 +75,11 @@ app.get('/api/entries', async (req, res) => {
   }
 });
 
-// 各向度投入量趨勢（過去 N 週，預設 8 週）
+// 各向度投入量趨勢（預設從 TREND_START_DATE 開始算到現在，也可以用 ?weeks= 覆蓋）
 app.get('/api/trend', async (req, res) => {
-  const weeks = Math.min(26, Math.max(2, Number(req.query.weeks) || 8));
+  const weeks = req.query.weeks
+    ? Math.min(52, Math.max(2, Number(req.query.weeks)))
+    : calc.weeksSince(calc.TREND_START_DATE);
   try {
     const { start } = calc.periodRange('week', -(weeks - 1));
     const { rows } = await pool.query('SELECT * FROM entries WHERE event_date >= $1', [start.toISOString().slice(0, 10)]);
@@ -271,14 +273,59 @@ app.post('/api/notes/:id/promote', async (req, res) => {
   }
 });
 
-// ================= 測試用途：清空所有資料 =================
-app.post('/api/reset-test-data', async (req, res) => {
+// ================= 想做的事（每日隨機挑一件）=================
+function dailyPickIndex(dateStr, length) {
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    hash = (hash * 31 + dateStr.charCodeAt(i)) >>> 0;
+  }
+  return hash % length;
+}
+
+app.get('/api/wishlist', async (req, res) => {
   try {
-    await pool.query('TRUNCATE TABLE entries, quick_notes RESTART IDENTITY');
+    const { rows } = await pool.query('SELECT * FROM wishlist_items ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '讀取想做的事失敗：' + err.message });
+  }
+});
+
+app.get('/api/wishlist/today', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM wishlist_items ORDER BY id ASC');
+    if (rows.length === 0) return res.json(null);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    res.json(rows[dailyPickIndex(todayStr, rows.length)]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '讀取今天想做的事失敗：' + err.message });
+  }
+});
+
+app.post('/api/wishlist', async (req, res) => {
+  const { content } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: '內容不可為空' });
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO wishlist_items (content) VALUES ($1) RETURNING *',
+      [content.trim()]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '新增失敗：' + err.message });
+  }
+});
+
+app.delete('/api/wishlist/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM wishlist_items WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
-    console.error('清空測試資料失敗', err);
-    res.status(500).json({ error: '清空測試資料失敗：' + err.message });
+    console.error(err);
+    res.status(500).json({ error: '刪除失敗：' + err.message });
   }
 });
 

@@ -61,11 +61,32 @@
 
       <div class="panel">
         <h2 class="panel-title">今天的行程與計畫</h2>
-        <ul class="note-list" id="todayScheduleList"></ul>
+        <div class="today-columns">
+          <div class="today-list-col">
+            <ul class="note-list" id="todayScheduleList"></ul>
+          </div>
+          <div class="today-margin-col">
+            <div class="margin-ring" id="marginRing">
+              <div class="margin-ring-inner"><span id="marginRingValue">--</span><span class="margin-ring-unit">%</span></div>
+            </div>
+            <p class="margin-ring-label">預期餘裕值</p>
+          </div>
+        </div>
       </div>
 
       <div class="panel">
-        <h2 class="panel-title">各向度投入量趨勢（近 8 週）</h2>
+        <h2 class="panel-title">想做的事</h2>
+        <p class="wishlist-today" id="wishlistToday">還沒有加入任何想做的事。</p>
+        <form id="wishlistForm" class="inline-form">
+          <input type="text" id="wishlist-content" placeholder="想加進清單的一件事" required>
+          <button type="submit" class="btn-primary">加入</button>
+        </form>
+        <button type="button" class="btn-ghost small" id="btnToggleWishlistManage" style="margin-top:10px;">管理清單</button>
+        <ul class="note-list hidden" id="wishlistManageList" style="margin-top:10px;"></ul>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">各向度投入量趨勢（自 9/14 起）</h2>
         <canvas id="trendChart" height="200"></canvas>
       </div>
     </section>
@@ -157,12 +178,6 @@
         <ul class="note-list muted" id="triagedList"></ul>
       </div>
     </section>
-
-    <div class="panel">
-      <h2 class="panel-title">測試用途</h2>
-      <p class="panel-hint">清空所有紀錄、隨手記與地點設定，重新開始測試。這個動作無法復原。</p>
-      <button class="btn-ghost full" id="btnResetTestData">清空所有測試資料</button>
-    </div>
 
   </main>
 

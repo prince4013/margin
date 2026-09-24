@@ -43,5 +43,12 @@ CREATE TABLE IF NOT EXISTS quick_notes (
   triaged_at TIMESTAMP
 );
 
+-- 「想做的事」清單，儀表板每天隨機挑一件出來提醒你
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  id SERIAL PRIMARY KEY,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT now()
+);
+
 -- v3.1：City 頁改成靜態 2.5D 插畫，不再需要真實地點座標，building_locations 表不再使用
 -- （保留舊表不刪，避免舊部署升級時出錯；程式碼已不再讀寫它）
