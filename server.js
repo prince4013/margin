@@ -24,7 +24,7 @@ function validDimensions(dimensions) {
 }
 
 app.post('/api/entries', async (req, res) => {
-  const { dimensions, event_date, description, intensity } = req.body;
+  const { dimensions, event_date, description, intensity, tags } = req.body;
   if (!validDimensions(dimensions)) {
     return res.status(400).json({ error: '請至少選擇一個向度' });
   }
@@ -33,9 +33,9 @@ app.post('/api/entries', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO entries (dimensions, event_date, description, intensity)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [dimensions, event_date, description, intensity || 3]
+      `INSERT INTO entries (dimensions, event_date, description, intensity, tags)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [dimensions, event_date, description, intensity || 3, Array.isArray(tags) ? tags : []]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -45,13 +45,14 @@ app.post('/api/entries', async (req, res) => {
 });
 
 app.get('/api/entries', async (req, res) => {
-  const { dimension, upcoming, unrated, week_offset, month_offset } = req.query;
+  const { dimension, upcoming, unrated, week_offset, month_offset, on_date } = req.query;
   try {
     const conditions = [];
     const params = [];
     if (dimension) { params.push(dimension); conditions.push(`$${params.length} = ANY(dimensions)`); }
     if (upcoming === 'true') { conditions.push(`event_date > CURRENT_DATE`); }
     if (unrated === 'true') { conditions.push(`event_date <= CURRENT_DATE`); }
+    if (on_date) { params.push(on_date); conditions.push(`event_date = $${params.length}`); }
     if (week_offset !== undefined) {
       const { start, end } = calc.periodRange('week', Number(week_offset) || 0);
       params.push(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10));
@@ -64,7 +65,8 @@ app.get('/api/entries', async (req, res) => {
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const order = upcoming === 'true' ? 'ORDER BY event_date ASC' : 'ORDER BY event_date DESC, created_at DESC';
-    const limit = (upcoming === 'true' || week_offset !== undefined || month_offset !== undefined) ? '' : 'LIMIT 200';
+    const noLimit = upcoming === 'true' || week_offset !== undefined || month_offset !== undefined || on_date;
+    const limit = noLimit ? '' : 'LIMIT 200';
     const { rows } = await pool.query(`SELECT * FROM entries ${where} ${order} ${limit}`, params);
     res.json(rows);
   } catch (err) {
@@ -73,9 +75,22 @@ app.get('/api/entries', async (req, res) => {
   }
 });
 
-// 編輯一筆紀錄（向度、日期、描述、投入程度）
+// 各向度投入量趨勢（過去 N 週，預設 8 週）
+app.get('/api/trend', async (req, res) => {
+  const weeks = Math.min(26, Math.max(2, Number(req.query.weeks) || 8));
+  try {
+    const { start } = calc.periodRange('week', -(weeks - 1));
+    const { rows } = await pool.query('SELECT * FROM entries WHERE event_date >= $1', [start.toISOString().slice(0, 10)]);
+    res.json(calc.computeTrend(rows, weeks));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '讀取趨勢失敗：' + err.message });
+  }
+});
+
+// 編輯一筆紀錄（向度、日期、描述、投入程度、標籤）
 app.patch('/api/entries/:id', async (req, res) => {
-  const { dimensions, event_date, description, intensity } = req.body;
+  const { dimensions, event_date, description, intensity, tags } = req.body;
   if (!validDimensions(dimensions)) {
     return res.status(400).json({ error: '請至少選擇一個向度' });
   }
@@ -84,8 +99,8 @@ app.patch('/api/entries/:id', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `UPDATE entries SET dimensions = $1, event_date = $2, description = $3, intensity = $4 WHERE id = $5 RETURNING *`,
-      [dimensions, event_date, description, intensity || 3, req.params.id]
+      `UPDATE entries SET dimensions = $1, event_date = $2, description = $3, intensity = $4, tags = $5 WHERE id = $6 RETURNING *`,
+      [dimensions, event_date, description, intensity || 3, Array.isArray(tags) ? tags : [], req.params.id]
     );
     if (rows.length === 0) return res.status(404).json({ error: '找不到這筆紀錄' });
     res.json(rows[0]);

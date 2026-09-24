@@ -58,6 +58,16 @@
       <div id="satisfactionCard" class="imbalance-card hidden">
         <p id="satisfactionText"></p>
       </div>
+
+      <div class="panel">
+        <h2 class="panel-title">今天的行程與計畫</h2>
+        <ul class="note-list" id="todayScheduleList"></ul>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">各向度投入量趨勢（近 8 週）</h2>
+        <canvas id="trendChart" height="200"></canvas>
+      </div>
     </section>
 
     <!-- ===== 輸入 ===== -->
@@ -79,6 +89,10 @@
           <label class="field">
             <span>投入程度：<span id="en-intensity-value">3</span></span>
             <div class="dot-scale-5" id="intensityDots"></div>
+          </label>
+          <label class="field">
+            <span>標籤（自由填寫，逗號分隔，選填）</span>
+            <input type="text" id="en-tags" placeholder="例如：課堂, 語言練習">
           </label>
           <button type="submit" class="btn-primary full">儲存</button>
         </form>
@@ -204,6 +218,10 @@
     <label class="field">
       <span>投入程度：<span id="edit-intensity-value">3</span></span>
       <div class="dot-scale-5" id="editIntensityDots"></div>
+    </label>
+    <label class="field">
+      <span>標籤（自由填寫，逗號分隔，選填）</span>
+      <input type="text" id="edit-tags" placeholder="例如：課堂, 語言練習">
     </label>
     <div class="modal-actions">
       <button class="btn-ghost" id="btnCancelEdit">取消</button>

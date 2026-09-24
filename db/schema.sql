@@ -10,8 +10,12 @@ CREATE TABLE IF NOT EXISTS entries (
   description TEXT NOT NULL,
   intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5，投入程度，輸入當下就填
   satisfaction NUMERIC, -- 1-5，滿意度，NULL 代表還沒評，事後在「滿意度」頁面填
+  tags TEXT[] NOT NULL DEFAULT '{}', -- 向度底下的自由標籤，例如學習底下的「課堂」「自學」
   created_at TIMESTAMP DEFAULT now()
 );
+
+-- 舊版可能沒有 tags 欄位，補上去不影響既有資料
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
 -- 舊版可能有 NOT NULL 限制或 kind 欄位，放寬/清掉，不影響既有資料
 ALTER TABLE entries ALTER COLUMN satisfaction DROP NOT NULL;

@@ -86,6 +86,14 @@ function dimTags(dims) {
   return (Array.isArray(dims) ? dims : []).map((d) => DIM_CONFIG[d]?.labelEn || d).join(' + ');
 }
 
+function tagChips(tags) {
+  return (Array.isArray(tags) && tags.length) ? ' · ' + tags.map((t) => `#${t}`).join(' ') : '';
+}
+
+function parseTagsInput(value) {
+  return value.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
 function buildIntensityDots(container, valueLabelEl, defaultVal) {
   container.dataset.value = defaultVal || 3;
   function render() {
@@ -156,6 +164,54 @@ async function loadDashboard() {
   } catch (err) {
     console.error('讀取儀表板失敗', err);
   }
+
+  try {
+    await loadTodaySchedule();
+  } catch (err) {
+    console.error('讀取今天的行程失敗', err);
+  }
+
+  try {
+    await loadTrendChart();
+  } catch (err) {
+    console.error('讀取趨勢失敗', err);
+  }
+}
+
+async function loadTodaySchedule() {
+  const rows = await api(`/entries?on_date=${todayStr()}`);
+  const list = document.getElementById('todayScheduleList');
+  list.innerHTML = rows.map((r) => `
+    <li><span>${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)}${tagChips(r.tags)} · 投入 ${r.intensity}</div></span></li>
+  `).join('') || '<li>今天還沒有排定的行程或計畫。</li>';
+}
+
+let trendChart;
+async function loadTrendChart() {
+  const points = await api('/trend?weeks=8');
+  const ctx = document.getElementById('trendChart');
+  if (typeof Chart === 'undefined') return;
+  if (trendChart) trendChart.destroy();
+
+  const labels = points.map((p) => p.label);
+  const datasets = DIMENSIONS.map((d) => ({
+    label: DIM_CONFIG[d].label,
+    data: points.map((p) => p.investments[d]),
+    borderColor: DIM_CONFIG[d].stroke,
+    backgroundColor: DIM_CONFIG[d].stroke,
+    fill: false,
+    tension: 0.3,
+    pointRadius: 3,
+  }));
+
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: { y: { beginAtZero: true } },
+    },
+  });
 }
 
 function renderHexChart(labels, investments, satisfactionValues) {
@@ -167,10 +223,10 @@ function renderHexChart(labels, investments, satisfactionValues) {
     type: 'radar',
     data: {
       labels,
-      // 陣列順序 = 畫的順序：投入(藍)先畫當底(order 較小，不透明)，滿意度(橘)後畫疊在上層(order 較大，30% 透明)
+      // 陣列順序 = 畫的順序：投入(藍)先畫當底、滿意度(橘)後畫疊在上層，兩層都半透明才能同時看到彼此
       datasets: [
-        { label: '投入量', data: investments, backgroundColor: '#378ADD', borderColor: '#2E6FA8', borderWidth: 1, pointRadius: 0, order: 1 },
-        { label: '滿意度', data: satisfactionValues, backgroundColor: 'rgba(216,90,48,0.3)', borderColor: 'rgba(216,90,48,0.7)', borderWidth: 1, pointRadius: 0, order: 2 },
+        { label: '投入量', data: investments, backgroundColor: 'rgba(55,138,221,0.45)', borderColor: '#378ADD', borderWidth: 1, pointRadius: 0, order: 1 },
+        { label: '滿意度', data: satisfactionValues, backgroundColor: 'rgba(216,90,48,0.4)', borderColor: 'rgba(216,90,48,0.8)', borderWidth: 1, pointRadius: 0, order: 2 },
       ],
     },
     options: {
@@ -195,10 +251,12 @@ function initEntryForm() {
       event_date: document.getElementById('en-date').value || todayStr(),
       description: document.getElementById('en-desc').value,
       intensity: Number(dots.dataset.value) || 3,
+      tags: parseTagsInput(document.getElementById('en-tags').value || ''),
     };
     try {
       await api('/entries', { method: 'POST', body: JSON.stringify(payload) });
       document.getElementById('en-desc').value = '';
+      document.getElementById('en-tags').value = '';
       document.getElementById('en-date').value = todayStr();
       await loadRecentEntries();
       await loadDashboard();
@@ -236,7 +294,7 @@ async function loadRecentEntries() {
   const list = document.getElementById('recentEntriesList');
   list.innerHTML = rows.map((r) => `
     <li>
-      <span>${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)} · ${r.event_date.slice(0, 10)} · 投入 ${r.intensity} · ${r.satisfaction === null ? '尚未評滿意度' : '滿意 ' + r.satisfaction}</div></span>
+      <span>${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)}${tagChips(r.tags)} · ${r.event_date.slice(0, 10)} · 投入 ${r.intensity} · ${r.satisfaction === null ? '尚未評滿意度' : '滿意 ' + r.satisfaction}</div></span>
       <span class="item-actions">
         <button data-edit-entry="${r.id}">編輯</button>
         <button data-delete-entry="${r.id}">刪除</button>
@@ -265,6 +323,7 @@ function openEditModal(entry) {
   buildDimensionPicker(document.getElementById('editDimensionPicker'), entry.dimensions);
   document.getElementById('edit-date').value = entry.event_date.slice(0, 10);
   document.getElementById('edit-desc').value = entry.description;
+  document.getElementById('edit-tags').value = (entry.tags || []).join(', ');
   buildIntensityDots(document.getElementById('editIntensityDots'), document.getElementById('edit-intensity-value'), Number(entry.intensity));
   document.getElementById('editModal').classList.remove('hidden');
 }
@@ -282,6 +341,7 @@ document.getElementById('btnConfirmEdit').addEventListener('click', async () => 
         event_date: document.getElementById('edit-date').value || todayStr(),
         description: document.getElementById('edit-desc').value,
         intensity: Number(dots.dataset.value) || 3,
+        tags: parseTagsInput(document.getElementById('edit-tags').value || ''),
       }),
     });
     document.getElementById('editModal').classList.add('hidden');
@@ -315,7 +375,7 @@ async function loadSatisfactionPage() {
       <h3 class="satisfaction-date-label">${d}</h3>
       ${byDate[d].map((r) => `
         <div class="satisfaction-row" data-entry-id="${r.id}">
-          <div class="satisfaction-row-desc">${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)} · 投入 ${r.intensity}</div></div>
+          <div class="satisfaction-row-desc">${escapeHtml(r.description)}<div class="item-meta">${dimTags(r.dimensions)}${tagChips(r.tags)} · 投入 ${r.intensity}</div></div>
           <div class="dot-scale-5 satisfaction-row-dots" data-value="${r.satisfaction || 0}">
             ${Array.from({ length: 5 }).map((_, i) => `<button type="button" class="dot-5 ${i < (r.satisfaction || 0) ? 'filled' : ''}" data-v="${i + 1}"></button>`).join('')}
           </div>
@@ -387,7 +447,7 @@ async function loadBuildingDetailEntries(dim) {
   const entries = await api(`/entries?dimension=${dim}&month_offset=${detailMonthOffset}`);
   const list = document.getElementById('buildingDetailList');
   list.innerHTML = entries.map((e) => `
-    <li><span>${escapeHtml(e.description)}<div class="item-meta">${dimTags(e.dimensions)} · ${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · ${e.satisfaction === null ? '尚未評滿意度' : '滿意 ' + e.satisfaction}</div></span></li>
+    <li><span>${escapeHtml(e.description)}<div class="item-meta">${dimTags(e.dimensions)}${tagChips(e.tags)} · ${e.event_date.slice(0, 10)} · 投入 ${e.intensity} · ${e.satisfaction === null ? '尚未評滿意度' : '滿意 ' + e.satisfaction}</div></span></li>
   `).join('') || '<li>這個月這個向度還沒有紀錄。</li>';
 
   const panel = document.getElementById('buildingDetailPanel');
