@@ -2,9 +2,10 @@
 
 -- v3.5：投入與滿意度分開評分。投入(intensity)在輸入當下就有；滿意度(satisfaction)是事後才知道的，
 -- 所以獨立成可為 NULL 的欄位，透過「滿意度」頁面事後評分。拿掉 kind(計畫/行動)這個概念。
+-- v3.6：事情為主，分類(向度)可複選，改成 dimensions 陣列欄位。
 CREATE TABLE IF NOT EXISTS entries (
   id SERIAL PRIMARY KEY,
-  dimension VARCHAR(20) NOT NULL,
+  dimensions TEXT[] NOT NULL DEFAULT '{}', -- 可複選，一件事可以同時屬於多個向度
   event_date DATE NOT NULL,
   description TEXT NOT NULL,
   intensity NUMERIC NOT NULL DEFAULT 3, -- 1-5，投入程度，輸入當下就填
@@ -16,6 +17,19 @@ CREATE TABLE IF NOT EXISTS entries (
 ALTER TABLE entries ALTER COLUMN satisfaction DROP NOT NULL;
 ALTER TABLE entries ALTER COLUMN satisfaction DROP DEFAULT;
 ALTER TABLE entries DROP COLUMN IF EXISTS kind;
+
+-- 從舊版單一 dimension 欄位遷移到可複選的 dimensions 陣列，不影響既有資料
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'entries' AND column_name = 'dimension') THEN
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS dimensions TEXT[];
+    UPDATE entries SET dimensions = ARRAY[dimension] WHERE dimensions IS NULL AND dimension IS NOT NULL;
+    UPDATE entries SET dimensions = '{}' WHERE dimensions IS NULL;
+    ALTER TABLE entries ALTER COLUMN dimensions SET DEFAULT '{}';
+    ALTER TABLE entries ALTER COLUMN dimensions SET NOT NULL;
+    ALTER TABLE entries DROP COLUMN dimension;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS quick_notes (
   id SERIAL PRIMARY KEY,

@@ -65,7 +65,7 @@
       <div class="panel">
         <form id="entryForm" class="form-grid">
           <label class="field">
-            <span>向度</span>
+            <span>向度（可複選）</span>
             <div class="dimension-picker" id="dimensionPicker"></div>
           </label>
           <label class="field">
@@ -73,8 +73,8 @@
             <input type="date" id="en-date">
           </label>
           <label class="field">
-            <span>內容描述</span>
-            <input type="text" id="en-desc" required placeholder="做了什麼？／排定了什麼？">
+            <span>發生了什麼事</span>
+            <input type="text" id="en-desc" required placeholder="例如：跟朋友一起去 IKEA">
           </label>
           <label class="field">
             <span>投入程度：<span id="en-intensity-value">3</span></span>
@@ -84,7 +84,14 @@
         </form>
       </div>
       <div class="panel">
-        <h2 class="panel-title">最近的紀錄</h2>
+        <div class="period-controls">
+          <h2 class="panel-title" style="margin:0;">最近的紀錄</h2>
+          <div class="period-nav">
+            <button class="icon-btn" id="btnPrevRecentWeek">‹</button>
+            <span id="recentWeekLabel" class="period-label">本週</span>
+            <button class="icon-btn" id="btnNextRecentWeek">›</button>
+          </div>
+        </div>
         <ul class="note-list" id="recentEntriesList"></ul>
       </div>
     </section>
@@ -155,7 +162,7 @@
   <div class="modal-card">
     <h3>轉為正式紀錄</h3>
     <label class="field">
-      <span>向度</span>
+      <span>向度（可複選）</span>
       <div class="dimension-picker" id="promoteDimensionPicker"></div>
     </label>
     <label class="field">
@@ -169,6 +176,33 @@
     <div class="modal-actions">
       <button class="btn-ghost" id="btnCancelPromote">取消</button>
       <button class="btn-primary" id="btnConfirmPromote">確認轉換</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編輯紀錄的彈窗 -->
+<div id="editModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>編輯紀錄</h3>
+    <label class="field">
+      <span>向度（可複選）</span>
+      <div class="dimension-picker" id="editDimensionPicker"></div>
+    </label>
+    <label class="field">
+      <span>日期</span>
+      <input type="date" id="edit-date">
+    </label>
+    <label class="field">
+      <span>發生了什麼事</span>
+      <input type="text" id="edit-desc">
+    </label>
+    <label class="field">
+      <span>投入程度：<span id="edit-intensity-value">3</span></span>
+      <div class="dot-scale-5" id="editIntensityDots"></div>
+    </label>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btnCancelEdit">取消</button>
+      <button class="btn-primary" id="btnConfirmEdit">儲存變更</button>
     </div>
   </div>
 </div>
