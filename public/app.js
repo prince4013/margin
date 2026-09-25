@@ -202,18 +202,9 @@ async function loadDashboard() {
     if (data.imbalance) {
       card.classList.remove('hidden');
       document.getElementById('imbalanceText').textContent =
-        `這期 ${DIM_CONFIG[data.imbalance.overloaded].label} 佔了 ${data.imbalance.overloadedShare}%，${DIM_CONFIG[data.imbalance.neglected].label} 幾乎掛零，要不要留點時間補回來？`;
+        `這期 ${DIM_CONFIG[data.imbalance.overloaded].label} 投入最多，佔了 ${data.imbalance.overloadedShare}%；${DIM_CONFIG[data.imbalance.neglected].label} 幾乎沒有照顧到，要不要留點時間補回來？`;
     } else {
       card.classList.add('hidden');
-    }
-
-    const satCard = document.getElementById('satisfactionCard');
-    if (data.satisfactionAlert) {
-      satCard.classList.remove('hidden');
-      document.getElementById('satisfactionText').textContent =
-        `這期投入最多的是 ${DIM_CONFIG[data.satisfactionAlert.dimension].label}，但平均滿意度只有 ${data.satisfactionAlert.avgSatisfaction} 分，要不要想想是不是方法需要調整？`;
-    } else {
-      satCard.classList.add('hidden');
     }
   } catch (err) {
     console.error('讀取儀表板失敗', err);

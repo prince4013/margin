@@ -153,7 +153,6 @@ app.get('/api/dashboard', async (req, res) => {
     );
     const breakdown = calc.computePeriodBreakdown(rows, start, end);
     const imbalance = calc.computeImbalance(breakdown);
-    const satisfactionAlert = calc.computeSatisfactionAlert(breakdown);
     res.json({
       period: type,
       offset,
@@ -161,7 +160,6 @@ app.get('/api/dashboard', async (req, res) => {
       end: end.toISOString().slice(0, 10),
       breakdown,
       imbalance,
-      satisfactionAlert,
     });
   } catch (err) {
     console.error(err);

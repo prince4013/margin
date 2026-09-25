@@ -237,10 +237,10 @@ body {
 .sidebar-collapse-btn {
   align-self: flex-end;
   background: var(--paper); border: 1px solid var(--border); border-radius: 999px;
-  width: 26px; height: 26px; font-size: 13px; color: var(--ink-soft); cursor: pointer;
-  margin-bottom: 10px;
+  width: 44px; height: 44px; font-size: 20px; color: var(--ink-soft); cursor: pointer;
+  margin-bottom: 12px; flex-shrink: 0;
 }
-.sidebar.collapsed { width: 40px; }
+.sidebar.collapsed { width: 60px; }
 .sidebar.collapsed .tab-btn span { display: inline-block; overflow: hidden; white-space: nowrap; width: 1.1em; }
 .tab-btn {
   background: none; border: none; cursor: pointer;

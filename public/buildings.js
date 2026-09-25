@@ -133,14 +133,42 @@ function buildingSVG(dimension, level, satisfaction) {
 }
 
 // 把六座建築嵌進一個固定版面的城市場景（含克萊德河背景），純靜態展示用
+// 3x3 九宮格版面：第一排右兩格放建築(左上留白)；第二排(河下方)左右放建築、中間是森林；
+// 第三排左邊兩格放建築、右下是湖。六個向度依序對應到六個建築格。
 const CITY_LAYOUT = {
-  learning:    { cx: 130, cy: 200 },
-  social:      { cx: 370, cy: 200 },
-  economy:     { cx: 610, cy: 200 },
-  energy:      { cx: 130, cy: 480 },
-  exploration: { cx: 370, cy: 480 },
-  reflection:  { cx: 610, cy: 480 },
+  learning:    { cx: 370, cy: 200 }, // 第一排中
+  social:      { cx: 610, cy: 200 }, // 第一排右
+  energy:      { cx: 130, cy: 460 }, // 第二排左
+  economy:     { cx: 610, cy: 460 }, // 第二排右
+  exploration: { cx: 130, cy: 720 }, // 第三排左
+  reflection:  { cx: 370, cy: 720 }, // 第三排中
 };
+const FOREST_POS = { cx: 370, cy: 460 }; // 第二排中
+const LAKE_POS = { cx: 610, cy: 720 }; // 第三排右
+
+function forestMarkup(cx, cy) {
+  const tree = (tx, ty, scale, dark) => `
+    <polygon points="${tx - 18 * scale},${ty + 22 * scale} ${tx},${ty - 30 * scale} ${tx + 18 * scale},${ty + 22 * scale}" fill="${dark ? '#3DA98A' : '#5DCAA5'}"/>
+    <polygon points="${tx - 13 * scale},${ty + 6 * scale} ${tx},${ty - 46 * scale} ${tx + 13 * scale},${ty + 6 * scale}" fill="${dark ? '#2E8F73' : '#4DB893'}"/>
+  `;
+  return `
+    <g class="city-forest" aria-hidden="true">
+      ${tree(cx - 34, cy + 14, 0.85, false)}
+      ${tree(cx, cy + 18, 1.05, true)}
+      ${tree(cx + 34, cy + 10, 0.9, false)}
+    </g>
+  `;
+}
+
+function lakeMarkup(cx, cy) {
+  return `
+    <g class="city-lake" aria-hidden="true">
+      <ellipse cx="${cx}" cy="${cy}" rx="78" ry="46" fill="#A8D8F0"/>
+      <path d="M${cx - 45},${cy - 4} Q${cx - 22},${cy - 14} ${cx},${cy - 4} T${cx + 45},${cy - 4}" stroke="#7EC1E8" stroke-width="2.5" fill="none" opacity="0.7"/>
+      <path d="M${cx - 40},${cy + 10} Q${cx - 18},${cy + 2} ${cx + 4},${cy + 10} T${cx + 42},${cy + 10}" stroke="#7EC1E8" stroke-width="2.5" fill="none" opacity="0.5"/>
+    </g>
+  `;
+}
 
 // 🎛️ 這週投入量達到這個數字 → 開花；等於 0 → 落葉。中間則不裝飾
 const BLOOM_THRESHOLD = 4;
@@ -192,16 +220,18 @@ function citySceneSVG(data, weeklyInvestments) {
         <rect x="${x - 6}" y="${rectTop}" width="${W + 12}" height="${rectHeight}" fill="transparent"/>
         <svg x="${x}" y="${y}" width="${W}" height="${H}" viewBox="0 0 100 220">${buildingInnerMarkup(dim, level, satisfaction)}</svg>
         ${decorationMarkup(state, cx, cy)}
-        <text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" fill="var(--ink-soft)">${DIM_CONFIG[dim].label}・${level}樓</text>
+        <text x="${cx}" y="${cy + 26}" text-anchor="middle" font-size="17" font-weight="600" fill="var(--ink)">${DIM_CONFIG[dim].label}・${level}樓</text>
       </g>
     `;
   }).join('');
 
   return `
-    <svg width="100%" viewBox="0 0 740 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="格拉斯哥城市示意，六座建築分兩排分布，高度代表等級">
-      <rect x="0" y="0" width="740" height="560" fill="var(--card)"/>
+    <svg width="100%" viewBox="0 0 740 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="格拉斯哥城市示意，九宮格版面，六座建築搭配森林跟湖泊裝飾，高度代表等級">
+      <rect x="0" y="0" width="740" height="800" fill="var(--card)"/>
       <path d="M -20 340 Q 240 300 400 345 T 760 320" stroke="var(--accent)" stroke-opacity="0.22" stroke-width="40" fill="none" stroke-linecap="round"/>
       <line x1="0" y1="120" x2="740" y2="130" stroke="var(--border)" stroke-width="1"/>
+      ${forestMarkup(FOREST_POS.cx, FOREST_POS.cy)}
+      ${lakeMarkup(LAKE_POS.cx, LAKE_POS.cy)}
       ${buildingsMarkup}
     </svg>
   `;
