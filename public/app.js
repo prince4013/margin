@@ -44,6 +44,21 @@ async function api(path, opts) {
   return res.status === 204 ? null : res.json();
 }
 
+// ---------- 側邊欄收合 ----------
+function initSidebarCollapse() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('btnCollapseSidebar');
+  const collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+  sidebar.classList.toggle('collapsed', collapsed);
+  btn.textContent = collapsed ? '›' : '‹';
+
+  btn.addEventListener('click', () => {
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    btn.textContent = isCollapsed ? '›' : '‹';
+    localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');
+  });
+}
+
 // ---------- 主題切換 ----------
 function initTheme() {
   const saved = localStorage.getItem('study-theme') || 'tiffany';
@@ -74,7 +89,7 @@ function initTabs() {
       document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
       document.querySelectorAll('.view').forEach((v) => v.classList.add('hidden'));
       document.getElementById(`view-${view}`).classList.remove('hidden');
-      if (view === 'input') loadRecentEntries();
+      if (view === 'input') loadGoodDayPage();
       if (view === 'satisfaction') loadSatisfactionPage();
       if (view === 'city') loadCity();
       if (view === 'notes') loadNotes();
@@ -202,18 +217,6 @@ async function loadDashboard() {
     }
   } catch (err) {
     console.error('讀取儀表板失敗', err);
-  }
-
-  try {
-    await loadTodaySchedule();
-  } catch (err) {
-    console.error('讀取今天的行程失敗', err);
-  }
-
-  try {
-    await loadWishlist();
-  } catch (err) {
-    console.error('讀取想做的事失敗', err);
   }
 
   try {
@@ -356,6 +359,7 @@ function initEntryForm() {
       document.getElementById('composerExtra').classList.add('hidden');
       textarea.focus();
       await loadRecentEntries();
+      await loadTodaySchedule();
       await loadDashboard();
     } catch (err) {
       alert('儲存失敗：' + err.message);
@@ -405,6 +409,12 @@ function weekRangeLabel(offset) {
 
 let recentWeekOffset = 0;
 
+async function loadGoodDayPage() {
+  await loadRecentEntries();
+  await loadTodaySchedule();
+  await loadWishlist();
+}
+
 async function loadRecentEntries() {
   document.getElementById('recentWeekLabel').textContent = weekRangeLabel(recentWeekOffset);
   const rows = await api(`/entries?week_offset=${recentWeekOffset}`);
@@ -423,6 +433,7 @@ async function loadRecentEntries() {
     btn.addEventListener('click', async () => {
       await api(`/entries/${btn.dataset.deleteEntry}`, { method: 'DELETE' });
       await loadRecentEntries();
+      await loadTodaySchedule();
       await loadDashboard();
     });
   });
@@ -463,6 +474,7 @@ document.getElementById('btnConfirmEdit').addEventListener('click', async () => 
     });
     document.getElementById('editModal').classList.add('hidden');
     await loadRecentEntries();
+    await loadTodaySchedule();
     await loadDashboard();
   } catch (err) {
     alert('儲存失敗：' + err.message);
@@ -690,4 +702,5 @@ document.getElementById('btnToggleRated').addEventListener('click', () => {
 });
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), [DIMENSIONS[0]]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);
-loadDashboard();
+initSidebarCollapse();
+loadGoodDayPage();
