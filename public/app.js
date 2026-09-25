@@ -364,6 +364,11 @@ function initEntryForm() {
 
   document.getElementById('btnPrevRecentWeek').addEventListener('click', () => { recentWeekOffset -= 1; loadRecentEntries(); });
   document.getElementById('btnNextRecentWeek').addEventListener('click', () => { recentWeekOffset += 1; loadRecentEntries(); });
+
+  document.getElementById('btnToggleRecent').addEventListener('click', () => {
+    document.getElementById('recentEntriesList').classList.toggle('hidden');
+    document.getElementById('recentCollapseArrow').classList.toggle('open');
+  });
 }
 
 // 送出後的小小回饋：對應向度的建築小圖示彈一下，模擬「城市馬上有反應」
@@ -465,15 +470,7 @@ document.getElementById('btnConfirmEdit').addEventListener('click', async () => 
 });
 
 // ---------- 滿意度（事後評分）----------
-async function loadSatisfactionPage() {
-  const rows = await api('/entries?unrated=true'); // event_date <= 今天的所有紀錄
-  const container = document.getElementById('satisfactionByDate');
-
-  if (rows.length === 0) {
-    container.innerHTML = '<p class="panel-hint">目前沒有可以評分的紀錄。</p>';
-    return;
-  }
-
+function renderSatisfactionRows(rows) {
   const byDate = {};
   rows.forEach((r) => {
     const d = r.event_date.slice(0, 10);
@@ -482,7 +479,7 @@ async function loadSatisfactionPage() {
   });
   const dates = Object.keys(byDate).sort().reverse();
 
-  container.innerHTML = dates.map((d) => `
+  return dates.map((d) => `
     <div class="satisfaction-date-group">
       <h3 class="satisfaction-date-label">${d}</h3>
       ${byDate[d].map((r) => `
@@ -495,7 +492,9 @@ async function loadSatisfactionPage() {
       `).join('')}
     </div>
   `).join('');
+}
 
+function wireSatisfactionDots(container) {
   container.querySelectorAll('.satisfaction-row').forEach((row) => {
     const entryId = row.dataset.entryId;
     const dotsEl = row.querySelector('.satisfaction-row-dots');
@@ -509,12 +508,32 @@ async function loadSatisfactionPage() {
           dotsEl.dataset.value = v;
           dotsEl.querySelectorAll('.dot-5').forEach((d, idx) => d.classList.toggle('filled', idx < v));
           await loadDashboard();
+          await loadSatisfactionPage();
         } catch (err) {
           alert('評分失敗：' + err.message);
         }
       });
     });
   });
+}
+
+async function loadSatisfactionPage() {
+  const rows = await api('/entries?unrated=true'); // event_date <= 今天的所有紀錄
+  const unrated = rows.filter((r) => r.satisfaction === null);
+  const rated = rows.filter((r) => r.satisfaction !== null);
+
+  const unratedContainer = document.getElementById('satisfactionUnrated');
+  unratedContainer.innerHTML = unrated.length
+    ? renderSatisfactionRows(unrated)
+    : '<p class="panel-hint">目前沒有待評分的紀錄。</p>';
+  wireSatisfactionDots(unratedContainer);
+
+  document.getElementById('satisfactionRatedCount').textContent = rated.length;
+  const ratedContainer = document.getElementById('satisfactionRated');
+  ratedContainer.innerHTML = rated.length
+    ? renderSatisfactionRows(rated)
+    : '<p class="panel-hint">目前沒有已評分的紀錄。</p>';
+  wireSatisfactionDots(ratedContainer);
 }
 
 // ---------- 城市（靜態 2.5D 插畫，點建築可看清單）----------
@@ -665,6 +684,10 @@ initTabs();
 initPeriodControls();
 initEntryForm();
 initNotesForm();
+document.getElementById('btnToggleRated').addEventListener('click', () => {
+  document.getElementById('satisfactionRated').classList.toggle('hidden');
+  document.getElementById('ratedCollapseArrow').classList.toggle('open');
+});
 buildDimensionPicker(document.getElementById('promoteDimensionPicker'), [DIMENSIONS[0]]);
 buildIntensityDots(document.getElementById('promoteIntensityDots'), document.getElementById('promote-intensity-value'), 3);
 loadDashboard();
