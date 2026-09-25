@@ -142,19 +142,51 @@ const CITY_LAYOUT = {
   reflection:  { cx: 360, cy: 380 },
 };
 
-function citySceneSVG(data) {
+// 🎛️ 這週投入量達到這個數字 → 開花；等於 0 → 落葉。中間則不裝飾
+const BLOOM_THRESHOLD = 4;
+const WILT_THRESHOLD = 0;
+
+function decorationMarkup(state, cx, groundY) {
+  if (state === 'bloom') {
+    return `<g class="city-decor-bloom" transform="translate(${cx + 36},${groundY - 6})">
+      <circle cx="0" cy="-6" r="3" fill="#F4A6C1"/>
+      <circle cx="5" cy="-2" r="3" fill="#F4A6C1"/>
+      <circle cx="-5" cy="-2" r="3" fill="#F4A6C1"/>
+      <circle cx="0" cy="2" r="3" fill="#F4A6C1"/>
+      <circle cx="0" cy="-2" r="2.3" fill="#FBD34D"/>
+    </g>`;
+  }
+  if (state === 'wilt') {
+    return `<g class="city-decor-wilt">
+      <ellipse cx="${cx - 30}" cy="${groundY - 2}" rx="5" ry="3" fill="#A8825A" transform="rotate(-20 ${cx - 30} ${groundY - 2})"/>
+      <ellipse cx="${cx - 38}" cy="${groundY + 4}" rx="4" ry="2.5" fill="#8B6B45" transform="rotate(15 ${cx - 38} ${groundY + 4})"/>
+    </g>`;
+  }
+  return '';
+}
+
+function decorationState(weeklyInvestment) {
+  if (weeklyInvestment === undefined || weeklyInvestment === null) return null;
+  if (weeklyInvestment >= BLOOM_THRESHOLD) return 'bloom';
+  if (weeklyInvestment <= WILT_THRESHOLD) return 'wilt';
+  return null;
+}
+
+function citySceneSVG(data, weeklyInvestments) {
   const W = 110;
   const H = W * 2.2;
-  const buildingsMarkup = Object.keys(CITY_LAYOUT).map((dim) => {
+  const buildingsMarkup = Object.keys(CITY_LAYOUT).map((dim, idx) => {
     const { cx, cy } = CITY_LAYOUT[dim];
     const level = (data && data[dim] && data[dim].level) || 1;
     const satisfaction = data && data[dim] ? data[dim].avgSatisfaction : 3;
     const x = cx - W / 2;
     const y = cy - H;
+    const state = decorationState(weeklyInvestments ? weeklyInvestments[dim] : null);
     return `
-      <g class="city-building" data-dim="${dim}" style="cursor:pointer;">
+      <g class="city-building" data-dim="${dim}" style="cursor:pointer; animation-delay:${idx * 0.07}s;">
         <rect x="${x - 6}" y="${y - 6}" width="${W + 12}" height="${H + 40}" fill="transparent"/>
         <svg x="${x}" y="${y}" width="${W}" height="${H}" viewBox="0 0 100 220">${buildingInnerMarkup(dim, level, satisfaction)}</svg>
+        ${decorationMarkup(state, cx, cy)}
         <text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="13" fill="var(--ink-soft)">${DIM_CONFIG[dim].label}・${level}樓</text>
       </g>
     `;

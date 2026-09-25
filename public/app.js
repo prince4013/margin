@@ -5,6 +5,36 @@ function todayStr() { return new Date().toISOString().slice(0, 10); }
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// ---------- 音效（Web Audio 合成，不需要外部音檔）----------
+let soundEnabled = localStorage.getItem('sound-enabled') !== 'off';
+let audioCtx;
+function playSoftChime() {
+  if (!soundEnabled) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.09, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch (e) { /* 靜默失敗即可，不影響評分功能 */ }
+}
+
+function spawnRipple(dotEl) {
+  const ripple = document.createElement('span');
+  ripple.className = 'dot-ripple';
+  ripple.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+  dotEl.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 550);
+}
 async function api(path, opts) {
   const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
   if (!res.ok) {
@@ -24,6 +54,15 @@ function initTheme() {
       document.documentElement.setAttribute('data-theme', t);
       localStorage.setItem('study-theme', t);
     });
+  });
+
+  const soundBtn = document.getElementById('btnToggleSound');
+  soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+  soundBtn.addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('sound-enabled', soundEnabled ? 'on' : 'off');
+    soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+    if (soundEnabled) playSoftChime();
   });
 }
 
@@ -275,28 +314,47 @@ function renderHexChart(labels, investments, satisfactionValues) {
   });
 }
 
-// ---------- 輸入 ----------
+// ---------- 輸入（訊息式輸入框）----------
 function initEntryForm() {
   const picker = document.getElementById('dimensionPicker');
   buildDimensionPicker(picker, [DIMENSIONS[0]]);
   const dots = document.getElementById('intensityDots');
-  buildIntensityDots(dots, document.getElementById('en-intensity-value'), 3);
+  buildIntensityDots(dots, null, 3);
   document.getElementById('en-date').value = todayStr();
+
+  const textarea = document.getElementById('en-desc');
+  const quickbar = document.getElementById('composerQuickbar');
+  textarea.addEventListener('input', () => {
+    if (textarea.value.trim().length > 0) quickbar.classList.add('open');
+  });
+  textarea.addEventListener('focus', () => {
+    if (textarea.value.trim().length > 0) quickbar.classList.add('open');
+  });
+
+  document.getElementById('btnToggleDateField').addEventListener('click', () => {
+    document.getElementById('composerExtra').classList.toggle('hidden');
+  });
 
   document.getElementById('entryForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!textarea.value.trim()) return;
+    const selectedDims = getSelectedDimensions(picker);
     const payload = {
-      dimensions: getSelectedDimensions(picker),
+      dimensions: selectedDims,
       event_date: document.getElementById('en-date').value || todayStr(),
-      description: document.getElementById('en-desc').value,
+      description: textarea.value,
       intensity: Number(dots.dataset.value) || 3,
       tags: parseTagsInput(document.getElementById('en-tags').value || ''),
     };
     try {
       await api('/entries', { method: 'POST', body: JSON.stringify(payload) });
-      document.getElementById('en-desc').value = '';
+      showComposerToast(selectedDims[0]);
+      textarea.value = '';
       document.getElementById('en-tags').value = '';
       document.getElementById('en-date').value = todayStr();
+      quickbar.classList.remove('open');
+      document.getElementById('composerExtra').classList.add('hidden');
+      textarea.focus();
       await loadRecentEntries();
       await loadDashboard();
     } catch (err) {
@@ -306,6 +364,21 @@ function initEntryForm() {
 
   document.getElementById('btnPrevRecentWeek').addEventListener('click', () => { recentWeekOffset -= 1; loadRecentEntries(); });
   document.getElementById('btnNextRecentWeek').addEventListener('click', () => { recentWeekOffset += 1; loadRecentEntries(); });
+}
+
+// 送出後的小小回饋：對應向度的建築小圖示彈一下，模擬「城市馬上有反應」
+function showComposerToast(dimension) {
+  const toast = document.getElementById('composerToast');
+  const level = (lastCumulative && lastCumulative[dimension] && lastCumulative[dimension].level) || 1;
+  const svg = typeof buildingSVG === 'function' ? buildingSVG(dimension, level, 3) : '';
+  toast.innerHTML = `<span class="composer-toast-icon">${svg}</span><span>${DIM_CONFIG[dimension].label} 長高了一點</span>`;
+  toast.classList.remove('hidden');
+  // 重新觸發動畫
+  toast.style.animation = 'none';
+  void toast.offsetWidth;
+  toast.style.animation = '';
+  clearTimeout(showComposerToast._t);
+  showComposerToast._t = setTimeout(() => toast.classList.add('hidden'), 1800);
 }
 
 // 跟 lib/calc.js 的 periodRange('week', offset) 邏輯一致，純前端用來顯示標籤
@@ -429,6 +502,8 @@ async function loadSatisfactionPage() {
     dotsEl.querySelectorAll('.dot-5').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const v = Number(btn.dataset.v);
+        spawnRipple(btn);
+        playSoftChime();
         try {
           await api(`/entries/${entryId}/satisfaction`, { method: 'PATCH', body: JSON.stringify({ satisfaction: v }) });
           dotsEl.dataset.value = v;
@@ -448,8 +523,12 @@ let lastCumulative = null;
 async function loadCity() {
   const cumulative = await api('/cumulative');
   lastCumulative = cumulative;
+  const dashboardData = await api('/dashboard?period=week&offset=0');
+  const weeklyInvestments = {};
+  DIMENSIONS.forEach((d) => { weeklyInvestments[d] = dashboardData.breakdown[d]?.investment || 0; });
+
   const container = document.getElementById('citySceneContainer');
-  container.innerHTML = citySceneSVG(cumulative);
+  container.innerHTML = citySceneSVG(cumulative, weeklyInvestments);
   document.getElementById('buildingDetailPanel').classList.add('hidden');
 
   container.querySelectorAll('[data-dim]').forEach((el) => {

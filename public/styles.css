@@ -155,6 +155,54 @@ body {
 
 /* ===== Wishlist ===== */
 .wishlist-today { font-size: 17px; font-weight: 500; background: var(--accent-tint); border-radius: var(--radius-md); padding: 14px 16px; margin: 0 0 14px; }
+/* ===== 輸入頁：訊息式輸入框 ===== */
+.composer-panel { position: relative; }
+.composer-textarea {
+  width: 100%; border: none; background: transparent; resize: none;
+  font-family: var(--font-body); font-size: 18px; color: var(--ink);
+  padding: 4px 0 14px; outline: none; line-height: 1.5;
+}
+.composer-textarea::placeholder { color: var(--ink-faint); }
+.composer-quickbar {
+  max-height: 0; overflow: hidden; opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.3s ease;
+}
+.composer-quickbar.open { max-height: 500px; opacity: 1; }
+.composer-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.composer-row .dot-scale-5 { flex: 1; }
+.composer-send { white-space: nowrap; }
+.composer-extra { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.composer-toast {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--accent-tint); color: var(--accent-dark);
+  border-radius: 999px; padding: 6px 14px 6px 6px; font-size: 13px;
+  animation: toast-in 0.3s ease;
+}
+.composer-toast-icon { width: 26px; height: 36px; display: flex; align-items: flex-end; }
+.composer-toast-icon svg { width: 100%; height: 100%; animation: building-pop 0.6s cubic-bezier(.34,1.56,.64,1); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes building-pop { 0% { transform: scaleY(0.6); opacity: 0; } 60% { transform: scaleY(1.12); opacity: 1; } 100% { transform: scaleY(1); } }
+
+/* ===== 滿意度圓點：水波紋 + 平滑變色 ===== */
+.dot-5 { position: relative; overflow: visible; transition: background-color 0.35s ease, transform 0.15s ease; }
+.dot-5:active { transform: scale(0.9); }
+.dot-ripple {
+  position: absolute; inset: 0; margin: auto; width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid currentColor; pointer-events: none;
+  animation: dot-ripple 0.5s ease-out forwards;
+}
+@keyframes dot-ripple { from { transform: scale(1); opacity: 0.6; } to { transform: scale(2.2); opacity: 0; } }
+
+.sound-toggle { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--ink-faint); padding: 4px; }
+
+/* ===== 城市：進場動畫 + 枯榮裝飾 ===== */
+.city-building { transform-origin: 50% 100%; animation: city-building-in 0.6s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes city-building-in { from { transform: scale(0.7) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+.city-decor-bloom { animation: decor-bloom 0.5s ease-out both; }
+.city-decor-wilt { opacity: 0.85; }
+@keyframes decor-bloom { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;

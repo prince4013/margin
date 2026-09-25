@@ -20,6 +20,7 @@
       <span class="brand-name">留學生活</span>
     </div>
     <div class="theme-switch" role="group" aria-label="切換主題色">
+      <button class="sound-toggle" id="btnToggleSound" aria-label="切換音效" title="切換音效">🔊</button>
       <button class="theme-dot" data-theme-btn="tiffany" style="--dot:#0ABAB5" aria-label="蒂芬妮綠"></button>
       <button class="theme-dot" data-theme-btn="sky" style="--dot:#4FA3E0" aria-label="天藍色"></button>
       <button class="theme-dot" data-theme-btn="yolk" style="--dot:#F3B93B" aria-label="鵝黃色"></button>
@@ -88,30 +89,30 @@
 
     <!-- ===== 輸入 ===== -->
     <section class="view hidden" id="view-input">
-      <div class="panel">
-        <form id="entryForm" class="form-grid">
-          <label class="field">
-            <span>向度（可複選）</span>
+      <div class="panel composer-panel">
+        <form id="entryForm">
+          <textarea id="en-desc" class="composer-textarea" rows="2" required placeholder="剛剛發生了什麼？"></textarea>
+
+          <div class="composer-quickbar" id="composerQuickbar">
             <div class="dimension-picker" id="dimensionPicker"></div>
-          </label>
-          <label class="field">
-            <span>日期</span>
-            <input type="date" id="en-date">
-          </label>
-          <label class="field">
-            <span>發生了什麼事</span>
-            <input type="text" id="en-desc" required placeholder="例如：跟朋友一起去 IKEA">
-          </label>
-          <label class="field">
-            <span>投入程度：<span id="en-intensity-value">3</span></span>
-            <div class="dot-scale-5" id="intensityDots"></div>
-          </label>
-          <label class="field">
-            <span>標籤（自由填寫，逗號分隔，選填）</span>
-            <input type="text" id="en-tags" placeholder="例如：課堂, 語言練習">
-          </label>
-          <button type="submit" class="btn-primary full">儲存</button>
+            <div class="composer-row">
+              <div class="dot-scale-5" id="intensityDots"></div>
+              <button type="button" class="icon-btn" id="btnToggleDateField" title="更改日期" aria-label="更改日期">📅</button>
+              <button type="submit" class="btn-primary composer-send">送出</button>
+            </div>
+            <div class="composer-extra hidden" id="composerExtra">
+              <label class="field">
+                <span>日期</span>
+                <input type="date" id="en-date">
+              </label>
+              <label class="field">
+                <span>標籤（逗號分隔，選填）</span>
+                <input type="text" id="en-tags" placeholder="例如：課堂, 語言練習">
+              </label>
+            </div>
+          </div>
         </form>
+        <div class="composer-toast hidden" id="composerToast"></div>
       </div>
       <div class="panel">
         <div class="period-controls">
